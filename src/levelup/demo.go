@@ -2,7 +2,9 @@ package main
 
 import (
 	"fmt"
+	"html/template"
 	"math/rand"
+	"net/http"
 	"sync"
 	"time"
 )
@@ -66,7 +68,28 @@ func publisTo(topic string, data string) {
 }
 
 func main() {
-	ch1 := make(chan DataEvent)
+
+	tmpl := template.Must(template.ParseFiles("/home/luigi/Desktop/SDCC_GO_Corsi_Petraglia/ESGO/src/forms/forms.html"))
+
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			tmpl.Execute(w, nil)
+			return
+		}
+
+		details := DataEvent{
+			Topic: r.FormValue("topic"),
+			Data:  r.FormValue("message"),
+		}
+
+		// do something with details
+		_ = details
+
+		tmpl.Execute(w, struct{ Success bool }{true})
+	})
+
+	http.ListenAndServe(":8080", nil)
+	/*ch1 := make(chan DataEvent)
 	ch2 := make(chan DataEvent)
 	ch3 := make(chan DataEvent)
 
@@ -86,5 +109,5 @@ func main() {
 		case d := <-ch3:
 			go printDataEvent("ch3", d)
 		}
-	}
+	}*/
 }
