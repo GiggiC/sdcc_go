@@ -12,23 +12,28 @@ var upgrader = websocket.Upgrader{
 	WriteBufferSize: 1024,
 }
 
+type Object struct {
+	Message string `json:"message"`
+	Topic   string `json:"topic"`
+}
+
 func main() {
 	http.HandleFunc("/echo", func(w http.ResponseWriter, r *http.Request) {
 		conn, _ := upgrader.Upgrade(w, r, nil) // error ignored for sake of simplicity
 
 		for {
-			// Read message from browser
-			msgType, msg, err := conn.ReadMessage()
+
+			var object Object
+
+			err := conn.ReadJSON(&object)
 			if err != nil {
-				return
+				fmt.Println("Error reading json.", err)
 			}
 
-			// Print the message to the console
-			fmt.Printf("%s sent: %s\n", conn.RemoteAddr(), string(msg))
+			fmt.Printf("Got message: %#v\n", object)
 
-			// Write message back to browser
-			if err = conn.WriteMessage(msgType, msg); err != nil {
-				return
+			if err = conn.WriteJSON(object); err != nil {
+				fmt.Println(err)
 			}
 		}
 	})

@@ -1,8 +1,12 @@
-<input id="input" type="text" />
+<label for="message">Message</label><input id="message" type="text" />
+<label for="topic">Topic</label><input id="topic" type="text" />
 <button onclick="send()">Send</button>
 <pre id="output"></pre>
+
 <script>
-    var input = document.getElementById("input");
+
+    var message = document.getElementById("message");
+    var topic = document.getElementById("topic");
     var output = document.getElementById("output");
     var socket = new WebSocket("ws://localhost:8080/echo");
 
@@ -15,7 +19,12 @@
     };
 
     function send() {
-        socket.send(input.value);
-        input.value = "";
+
+        var data = JSON.stringify({ "Message": message.value, "Topic": topic.value });
+
+        socket.send(data);
+        message.value = "";
+        topic.value = "";
     }
+
 </script>
