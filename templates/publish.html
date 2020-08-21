@@ -1,0 +1,57 @@
+{{define "title"}}Dashboard Example{{end}}
+
+{{define "body"}}
+
+
+
+<div class="row">
+
+    <div class="col-md-12 order-md-1">
+        <form class="needs-validation" novalidate>
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label for="firstName">Message</label>
+                    <input type="text" class="form-control" id="message" placeholder="" value="" required>
+                    <div class="invalid-feedback">
+                        Valid first name is required.
+                    </div>
+                </div>
+
+                <div class="col-md-5 mb-3">
+                    <label for="country">Topic</label>
+                    <select class="custom-select d-block w-100" id="country" required>
+                        <option value="">Choose...</option>
+                        <option>Topic 1</option>
+                        <option>Topic 2</option>
+                        <option>Topic 3</option>
+                        <option>Topic 4</option>
+                    </select>
+                    <div class="invalid-feedback">
+                        Please select a valid Topic.
+                    </div>
+                </div>
+
+            </div>
+
+            <hr class="mb-4">
+            <button class="btn btn-primary btn-lg btn-block" type="submit" onclick="send()">Send Message
+            </button>
+        </form>
+    </div>
+</div>
+
+<script>
+    var message = document.getElementById("message");
+    var topic = document.getElementById("topic");
+    var socket = new WebSocket("ws://localhost:8080/websocket");
+
+    function send() {
+
+        var data = JSON.stringify({"Message": message.value, "Topic": topic.value});
+
+        socket.send(data);
+        message.value = "";
+        topic.value = "";
+    }
+</script>
+{{end}}
