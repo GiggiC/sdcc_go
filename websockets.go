@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/gorilla/websocket"
 	_ "github.com/lib/pq"
+	"golang.org/x/crypto/bcrypt"
 	"html/template"
 	"log"
 	"math/rand"
@@ -14,6 +15,8 @@ import (
 	"sync"
 	"time"
 )
+
+var db *sql.DB
 
 const (
 	host     = "localhost"
@@ -86,18 +89,65 @@ func publisTo(topic string, data string) {
 	}
 }
 
+func homePage(res http.ResponseWriter, req *http.Request) {
+
+	http.ServeFile(res, req, "signin.html")
+}
+
+func signupPage(res http.ResponseWriter, req *http.Request) {
+
+	if req.Method != "POST" {
+		http.ServeFile(res, req, "registration.html")
+		return
+	}
+
+	username := req.FormValue("username")
+	password := req.FormValue("password")
+	email := req.FormValue("email")
+
+	var user string
+
+	err := db.QueryRow("SELECT username FROM users WHERE username=?", username).Scan(&user)
+
+	switch {
+	case err == sql.ErrNoRows:
+		hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+		if err != nil {
+			http.Error(res, "Server error, unable to create your account.", 500)
+			return
+		}
+
+		_, err = db.Exec("INSERT INTO users(username, password, email) VALUES(?, ?)", username, hashedPassword, email)
+		if err != nil {
+			http.Error(res, "Server error, unable to create your account.", 500)
+			return
+		}
+
+		res.Write([]byte("User created!"))
+		return
+	case err != nil:
+		http.Error(res, "Server error, unable to create your account.", 500)
+		return
+	default:
+		http.Redirect(res, req, "/", 301)
+	}
+}
+
 func main() {
 
 	psqlInfo := fmt.Sprintf("host=%s port=%d user=%s "+
 		"password=%s dbname=%s sslmode=disable",
 		host, port, user, password, dbname)
 	db, err := sql.Open("postgres", psqlInfo)
+
 	if err != nil {
 		panic(err)
 	}
+
 	defer db.Close()
 
 	err = db.Ping()
+
 	if err != nil {
 		panic(err)
 	}
@@ -106,9 +156,14 @@ func main() {
 
 	fs := http.FileServer(http.Dir("./static"))
 	http.Handle("/static/", http.StripPrefix("/static/", fs))
+
 	http.HandleFunc("/", serveTemplate)
 
-	http.HandleFunc("/websocket", func(w http.ResponseWriter, r *http.Request) {
+	http.HandleFunc("/index", homePage)
+
+	http.HandleFunc("/registration", signupPage)
+
+	/*http.HandleFunc("/websocket", func(w http.ResponseWriter, r *http.Request) {
 		conn, _ := upgrader.Upgrade(w, r, nil) // error ignored for sake of simplicity
 
 		for {
@@ -126,7 +181,7 @@ func main() {
 				fmt.Println(err)
 			}
 		}
-	})
+	})*/
 
 	log.Println("Listening on :8080...")
 	err3 := http.ListenAndServe(":8080", nil)

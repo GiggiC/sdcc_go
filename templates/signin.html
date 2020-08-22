@@ -1,40 +1,43 @@
-<style>
-    .bd-placeholder-img {
-        font-size: 1.125rem;
-        text-anchor: middle;
-        -webkit-user-select: none;
-        -moz-user-select: none;
-        -ms-user-select: none;
-        user-select: none;
-    }
-
-    @media (min-width: 768px) {
-        .bd-placeholder-img-lg {
-            font-size: 3.5rem;
-        }
-    }
-</style>
-<!-- Custom styles for this template -->
-<link href="../static/css/signin.css" rel="stylesheet">
-
 {{define "title"}}Dashboard Example{{end}}
 
 {{define "body"}}
 
-    <body class="text-center">
-    <form class="form-signin">
-        <img class="mb-4" src="../static/assets/brand/bootstrap-solid.svg" alt="" width="72" height="72">
-        <h1 class="h3 mb-3 font-weight-normal">Please sign in</h1>
-        <label for="inputEmail" class="sr-only">Email address</label>
-        <input type="email" id="inputEmail" class="form-control" placeholder="Email address" required autofocus>
-        <label for="inputPassword" class="sr-only">Password</label>
-        <input type="password" id="inputPassword" class="form-control" placeholder="Password" required>
-        <div class="checkbox mb-3">
-            <label>
-                <input type="checkbox" value="remember-me"> Remember me
-            </label>
+    <br>
+    <div class="container">
+
+        <div class="row justify-content-center">
+            <div class="col-md-6">
+                <div class="card">
+                    <header class="card-header">
+                        <a href="registration.html" class="float-right btn btn-outline-primary mt-1">Sign Up</a>
+                        <h4 class="card-title mt-2">Sign up</h4>
+                    </header>
+                    <article class="card-body">
+
+                        <form class="form-signin text-center">
+                            <img class="mb-4" src="../static/assets/brand/bootstrap-solid.svg" alt="" width="72"
+                                 height="72">
+                            <h1 class="h3 mb-3 font-weight-normal">Please sign in</h1>
+                            <div class="form-group">
+                                <input type="email" class="form-control" placeholder="Email">
+                            </div> <!-- form-group end.// -->
+                            <div class="form-group">
+                                <input class="form-control" type="password" placeholder="Password">
+                            </div> <!-- form-group end.// -->
+                            <div class="form-group">
+                                <button class="btn btn-lg btn-primary btn-block" type="submit">Sign In</button>
+                            </div> <!-- form-group// -->
+                        </form>
+
+                    </article>
+
+                    <div class="border-top card-body text-center">
+                        Not already signed up? <a href="registration.html">Sign Up</a>
+                    </div>
+
+                </div>
+            </div>
         </div>
-        <button class="btn btn-lg btn-primary btn-block" type="submit">Sign in</button>
-    </form>
-    </body>
+
+
 {{end}}

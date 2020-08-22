@@ -13,6 +13,8 @@
 
         <!-- Bootstrap core CSS -->
         <link href="/static/css/bootstrap.min.css" rel="stylesheet">
+        <link href="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/4.1.3/css/bootstrap.css" rel="stylesheet">
+        <link href="https://cdn.datatables.net/1.10.21/css/dataTables.bootstrap4.min.css" rel="stylesheet">
 
         <style>
             .bd-placeholder-img {
@@ -32,20 +34,23 @@
         </style>
         <!-- Custom styles for this template -->
         <link href="/static/css/dashboard.css" rel="stylesheet">
+
+        <script src="https://code.jquery.com/jquery-3.5.1.js"></script>
+        <script src="https://cdn.datatables.net/1.10.21/js/jquery.dataTables.min.js"></script>
+        <script src="https://cdn.datatables.net/1.10.21/js/dataTables.bootstrap4.min.js"></script>
     </head>
     <body>
 
     <nav class="navbar navbar-dark sticky-top bg-dark flex-md-nowrap p-0 shadow">
-        <a class="navbar-brand col-md-3 col-lg-2 mr-0 px-3" href="#">Company name</a>
+        <a class="navbar-brand col-md-3 col-lg-2 mr-0 px-3" href="#">SDCC</a>
         <button class="navbar-toggler position-absolute d-md-none collapsed" type="button" data-toggle="collapse"
                 data-target="#sidebarMenu" aria-controls="sidebarMenu" aria-expanded="false"
                 aria-label="Toggle navigation">
             <span class="navbar-toggler-icon"></span>
         </button>
-        <input class="form-control form-control-dark w-100" type="text" placeholder="Search" aria-label="Search">
         <ul class="navbar-nav px-3">
             <li class="nav-item text-nowrap">
-                <a class="nav-link" href="#">Sign out</a>
+                <a class="nav-link" href="registration.html">Sign Up</a>
             </li>
         </ul>
     </nav>
@@ -57,7 +62,7 @@
                     <ul class="nav flex-column">
                         <li class="nav-item">
                             <a class="nav-link" href="publish.html">
-                                <span data-feather="home"></span>
+                                <span data-feather="send"></span>
                                 Publish Message <span class="sr-only"></span>
                             </a>
                         </li>
@@ -67,14 +72,17 @@
                                 Topic Subscription
                             </a>
                         </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="notifications.html">
+                                <span data-feather="message-square"></span>
+                                Notifications
+                            </a>
+                        </li>
                     </ul>
                 </div>
             </nav>
 
             <main role="main" class="col-md-9 ml-sm-auto col-lg-10 px-md-4">
-                <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
-                    <h1 class="h2">Dashboard</h1>
-                </div>
 
                 {{template "body"}}
 
@@ -84,10 +92,7 @@
 
     </body>
     </html>
-    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"
-            integrity="sha384-DfXdz2htPH0lsSSs5nCTpuj/zy4C+OGpamoFVy38MVBnE+IbbVYUew+OrCXaRkfj"
-            crossorigin="anonymous"></script>
-    <script>window.jQuery || document.write('<script src="/static/js/vendor/jquery.slim.min.js"><\/script>')</script>
+
     <script src="/static/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/feather-icons/4.9.0/feather.min.js"></script>
     <script src="/static/js/dashboard.js"></script>
