@@ -93,6 +93,19 @@
     </body>
     </html>
 
+    <script>
+        var x = document.cookie;
+        var value;
+        console.log(x)
+        if (x === '') {
+            value = 'hidden'
+        } else {
+            console.log('visible')
+            value = 'visible'
+        }
+        document.getElementById("sidebarMenu").style.visibility = value;
+    </script>
+
     <script src="/static/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/feather-icons/4.9.0/feather.min.js"></script>
     <script src="/static/js/dashboard.js"></script>
