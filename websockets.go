@@ -4,6 +4,8 @@ package main
 import (
 	"database/sql"
 	"fmt"
+	"github.com/gomodule/redigo/redis"
+	_ "github.com/gomodule/redigo/redis"
 	"github.com/gorilla/websocket"
 	_ "github.com/lib/pq"
 	"golang.org/x/crypto/bcrypt"
@@ -16,7 +18,12 @@ import (
 	"time"
 )
 
-var db *sql.DB
+type server struct {
+	db *sql.DB
+}
+
+// Store the redis connection as a package level variable
+var cache redis.Conn
 
 const (
 	host     = "localhost"
@@ -89,15 +96,24 @@ func publisTo(topic string, data string) {
 	}
 }
 
-func homePage(res http.ResponseWriter, req *http.Request) {
-
-	http.ServeFile(res, req, "signin.html")
+func initCache() {
+	// Initialize the redis connection to a redis instance running on your local machine
+	conn, err := redis.DialURL("redis://localhost")
+	if err != nil {
+		panic(err)
+	}
+	// Assign the connection to the package level `cache` variable
+	cache = conn
 }
 
-func signupPage(res http.ResponseWriter, req *http.Request) {
+func (s *server) signupPage(res http.ResponseWriter, req *http.Request) {
 
 	if req.Method != "POST" {
-		http.ServeFile(res, req, "registration.html")
+		lp := filepath.Join("templates", "layout.html")
+		fp := filepath.Join("templates", "registration.html")
+
+		tmpl, _ := template.ParseFiles(lp, fp)
+		tmpl.ExecuteTemplate(res, "layout", nil)
 		return
 	}
 
@@ -107,33 +123,85 @@ func signupPage(res http.ResponseWriter, req *http.Request) {
 
 	var user string
 
-	err := db.QueryRow("SELECT username FROM users WHERE username=?", username).Scan(&user)
+	err := s.db.QueryRow("SELECT email FROM users WHERE email=$1", email).Scan(&user)
 
 	switch {
 	case err == sql.ErrNoRows:
+
 		hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+
 		if err != nil {
 			http.Error(res, "Server error, unable to create your account.", 500)
 			return
 		}
 
-		_, err = db.Exec("INSERT INTO users(username, password, email) VALUES(?, ?)", username, hashedPassword, email)
+		sqlStatement := `
+			INSERT INTO users (email, username, password)
+			VALUES ($1, $2, $3)`
+
+		_, err = s.db.Exec(sqlStatement, email, username, hashedPassword)
+
 		if err != nil {
-			http.Error(res, "Server error, unable to create your account.", 500)
-			return
+			panic(err)
 		}
 
-		res.Write([]byte("User created!"))
+		http.Redirect(res, req, "/index", 301)
+
 		return
+
 	case err != nil:
+
+		res.Write([]byte("User error 1!"))
 		http.Error(res, "Server error, unable to create your account.", 500)
+
 		return
+
 	default:
-		http.Redirect(res, req, "/", 301)
+
+		http.Redirect(res, req, "/registrationError", 301)
+
+		return
 	}
 }
 
+func (s *server) index(res http.ResponseWriter, req *http.Request) {
+
+	if req.Method != "POST" {
+
+		lp := filepath.Join("templates", "layout.html")
+		fp := filepath.Join("templates", "signin.html")
+
+		tmpl, _ := template.ParseFiles(lp, fp)
+		tmpl.ExecuteTemplate(res, "layout", nil)
+	}
+
+	email := req.FormValue("email")
+	password := req.FormValue("password")
+
+	var databaseEmail string
+	var databasePassword string
+
+	err := s.db.QueryRow("SELECT email, password FROM users WHERE email=$1", email).Scan(&databaseEmail, &databasePassword)
+
+	if err != nil {
+		http.Redirect(res, req, "/index", 301)
+		return
+	}
+
+	err = bcrypt.CompareHashAndPassword([]byte(databasePassword), []byte(password))
+	if err != nil {
+		http.Redirect(res, req, "/index", 301)
+		return
+	}
+
+	res.Write([]byte("Hello" + databaseEmail))
+
+	return
+}
+
 func main() {
+
+	initCache()
 
 	psqlInfo := fmt.Sprintf("host=%s port=%d user=%s "+
 		"password=%s dbname=%s sslmode=disable",
@@ -154,14 +222,14 @@ func main() {
 
 	fmt.Println("Successfully connected!")
 
+	s := server{db: db}
+
 	fs := http.FileServer(http.Dir("./static"))
 	http.Handle("/static/", http.StripPrefix("/static/", fs))
 
-	http.HandleFunc("/", serveTemplate)
-
-	http.HandleFunc("/index", homePage)
-
-	http.HandleFunc("/registration", signupPage)
+	http.HandleFunc("/", s.index)
+	http.HandleFunc("/registration", s.signupPage)
+	http.HandleFunc("/registrationError", registrationError)
 
 	/*http.HandleFunc("/websocket", func(w http.ResponseWriter, r *http.Request) {
 		conn, _ := upgrader.Upgrade(w, r, nil) // error ignored for sake of simplicity
@@ -193,9 +261,10 @@ func main() {
 
 }
 
-func serveTemplate(w http.ResponseWriter, r *http.Request) {
+func registrationError(w http.ResponseWriter, r *http.Request) {
+
 	lp := filepath.Join("templates", "layout.html")
-	fp := filepath.Join("templates", filepath.Clean(r.URL.Path))
+	fp := filepath.Join("templates", "registrationError.html")
 
 	tmpl, _ := template.ParseFiles(lp, fp)
 	tmpl.ExecuteTemplate(w, "layout", nil)
