@@ -4,9 +4,9 @@ package main
 import (
 	"database/sql"
 	"fmt"
-	"github.com/gomodule/redigo/redis"
 	_ "github.com/gomodule/redigo/redis"
-	"github.com/google/uuid"
+	"github.com/gorilla/sessions"
+	_ "github.com/gorilla/sessions"
 	"github.com/gorilla/websocket"
 	_ "github.com/lib/pq"
 	"golang.org/x/crypto/bcrypt"
@@ -19,12 +19,31 @@ import (
 	"time"
 )
 
+type Todo struct {
+	Title string
+	Done  bool
+}
+
+type TodoPageData struct {
+	PageTitle string
+	Todos     []Todo
+}
+
 type server struct {
 	db *sql.DB
 }
 
-// Store the redis connection as a package level variable
-var cache redis.Conn
+var (
+	// key must be 16, 24 or 32 bytes long (AES-128, AES-192 or AES-256)
+	key   = []byte("super-secret-key")
+	store = sessions.NewCookieStore(key)
+)
+
+type User struct {
+	Firstname string `json:"firstname"`
+	Lastname  string `json:"lastname"`
+	Age       int    `json:"age"`
+}
 
 const (
 	host     = "localhost"
@@ -97,26 +116,27 @@ func publisTo(topic string, data string) {
 	}
 }
 
-func initCache() {
-	// Initialize the redis connection to a redis instance running on your local machine
-	conn, err := redis.DialURL("redis://localhost:6379")
-	if err != nil {
-		panic(err)
-	}
-	// Assign the connection to the package level `cache` variable
-	cache = conn
-}
-
 func (s *server) notifications(res http.ResponseWriter, req *http.Request) {
 
-	if req.Method != "POST" {
-		lp := filepath.Join("templates", "layout.html")
-		fp := filepath.Join("templates", "notifications.html")
+	lp := filepath.Join("templates", "layout.html")
+	fp := filepath.Join("templates", "notifications.html")
 
-		tmpl, _ := template.ParseFiles(lp, fp)
-		tmpl.ExecuteTemplate(res, "layout", nil)
-		return
+	tmpl := template.Must(template.ParseFiles(lp, fp))
+
+	data := TodoPageData{
+		PageTitle: "My TODO list",
+		Todos: []Todo{
+			{Title: "Task 1", Done: false},
+			{Title: "Task 2", Done: true},
+			{Title: "Task 3", Done: true},
+		},
 	}
+
+	//tmpl.Execute(res, data)
+	tmpl.ExecuteTemplate(res, "layout", data)
+
+	return
+
 }
 
 func (s *server) signupPage(res http.ResponseWriter, req *http.Request) {
@@ -179,7 +199,7 @@ func (s *server) signupPage(res http.ResponseWriter, req *http.Request) {
 
 func (s *server) publish(res http.ResponseWriter, req *http.Request) {
 
-	// We can obtain the session token from the requests cookies, which come with every request
+	/*// We can obtain the session token from the requests cookies, which come with every request
 	c, err := req.Cookie("session_token")
 	if err != nil {
 		if err == http.ErrNoCookie {
@@ -206,10 +226,12 @@ func (s *server) publish(res http.ResponseWriter, req *http.Request) {
 		return
 	}
 	// Finally, return the welcome message to the user
-	res.Write([]byte(fmt.Sprintf("Welcomeeeeeee %s!", response)))
+	res.Write([]byte(fmt.Sprintf("Welcomeeeeeee %s!", response)))*/
 }
 
 func (s *server) index(res http.ResponseWriter, req *http.Request) {
+
+	session, _ := store.Get(req, "cookie-name")
 
 	if req.Method != "POST" {
 
@@ -239,119 +261,30 @@ func (s *server) index(res http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	// Create a new random session token
-	sessionToken := uuid.New().String()
-
-	// Set the token in the cache, along with the user whom it represents
-	// The token has an expiry time of 120 seconds
-	_, err = cache.Do("SETEX", sessionToken, "120", databaseEmail)
-	if err != nil {
-		// If there is an error in setting the cache, return an internal server error
-		res.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
-	// Finally, we set the client cookie for "session_token" as the session token we just generated
-	// we also set an expiry time of 120 seconds, the same as the cache
-	http.SetCookie(res, &http.Cookie{
-		Name:    "session_token",
-		Value:   sessionToken,
-		Expires: time.Now().Add(120 * time.Second),
-	})
+	session.Values["authenticated"] = true
+	session.Save(req, res)
 
 	http.Redirect(res, req, "/notifications", 301)
 
 	return
 }
 
-func Refresh(res http.ResponseWriter, req *http.Request) {
-	// (BEGIN) The code uptil this point is the same as the first part of the `Welcome` route
-	c, err := req.Cookie("session_token")
-	if err != nil {
-		if err == http.ErrNoCookie {
-			res.WriteHeader(http.StatusUnauthorized)
-			return
-		}
-		res.WriteHeader(http.StatusBadRequest)
-		return
-	}
-	sessionToken := c.Value
-
-	response, err := cache.Do("GET", sessionToken)
-	if err != nil {
-		res.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-	if response == nil {
-		res.WriteHeader(http.StatusUnauthorized)
-		return
-	}
-	// (END) The code uptil this point is the same as the first part of the `Welcome` route
-
-	// Now, create a new session token for the current user
-	newSessionToken := uuid.New().String()
-	_, err = cache.Do("SETEX", newSessionToken, "120", fmt.Sprintf("%s", response))
-	if err != nil {
-		res.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
-	// Delete the older session token
-	_, err = cache.Do("DEL", sessionToken)
-	if err != nil {
-		res.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
-	// Set the new token as the users `session_token` cookie
-	http.SetCookie(res, &http.Cookie{
-		Name:    "session_token",
-		Value:   newSessionToken,
-		Expires: time.Now().Add(120 * time.Second),
-	})
-
-	http.Redirect(res, req, "/notifications", 301)
-
-}
+//TODO refresh
 
 func logout(res http.ResponseWriter, req *http.Request) {
 
-	// (BEGIN) The code uptil this point is the same as the first part of the `Welcome` route
-	c, err := req.Cookie("session_token")
-	if err != nil {
-		if err == http.ErrNoCookie {
-			res.WriteHeader(http.StatusUnauthorized)
-			return
-		}
-		res.WriteHeader(http.StatusBadRequest)
-		return
-	}
-	sessionToken := c.Value
+	session, _ := store.Get(req, "cookie-name")
 
-	response, err := cache.Do("GET", sessionToken)
-	if err != nil {
-		res.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-	if response == nil {
-		res.WriteHeader(http.StatusUnauthorized)
-		return
-	}
-	// (END) The code uptil this point is the same as the first part of the `Welcome` route
+	// Revoke users authentication
+	session.Values["authenticated"] = false
+	session.Save(req, res)
 
-	// Set the new token as the users `session_token` cookie
-	http.SetCookie(res, &http.Cookie{
-		Name:    sessionToken,
-		Value:   "",
-		Expires: time.Now().Add(0 * time.Second),
-	})
+	res.Write([]byte(fmt.Sprint("OK")))
+	//http.Redirect(res, req, "/notifications", 301)
 
-	http.Redirect(res, req, "/notifications", 301)
 }
 
 func main() {
-
-	initCache()
 
 	psqlInfo := fmt.Sprintf("host=%s port=%d user=%s "+
 		"password=%s dbname=%s sslmode=disable",
@@ -379,7 +312,7 @@ func main() {
 
 	http.HandleFunc("/", s.index)
 	http.HandleFunc("/logout", logout)
-	http.HandleFunc("/refresh", Refresh)
+	//http.HandleFunc("/refresh", Refresh)
 	http.HandleFunc("/registration", s.signupPage)
 	http.HandleFunc("/registrationError", registrationError)
 	http.HandleFunc("/publish", s.publish)

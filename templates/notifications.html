@@ -6,7 +6,18 @@
         <h1 class="h2">Notifications</h1>
     </div>
 
-    <table id="example" class="table table-striped">
+    <h1>{{.PageTitle}}</h1>
+    <ul>
+        {{range .Todos}}
+            {{if .Done}}
+                <li class="done">{{.Title}}</li>
+            {{else}}
+                <li>{{.Title}}</li>
+            {{end}}
+        {{end}}
+    </ul>
+
+    {{/* <table id="example" class="table table-striped">
         <thead>
         <tr>
             <th scope="col">#</th>
@@ -41,6 +52,6 @@
         $(document).ready(function () {
             $('#example').DataTable();
         });
-    </script>
+    </script>*/}}
 {{end}}
 
