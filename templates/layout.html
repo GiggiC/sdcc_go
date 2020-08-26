@@ -42,70 +42,66 @@
     <body>
 
     <nav class="navbar navbar-dark sticky-top bg-dark flex-md-nowrap p-0 shadow">
-        <a class="navbar-brand col-md-3 col-lg-2 mr-0 px-3" href="#">SDCC</a>
-        <button class="navbar-toggler position-absolute d-md-none collapsed" type="button" data-toggle="collapse"
-                data-target="#sidebarMenu" aria-controls="sidebarMenu" aria-expanded="false"
-                aria-label="Toggle navigation">
-            <span class="navbar-toggler-icon"></span>
-        </button>
-        <ul class="navbar-nav px-3">
-            <li class="nav-item text-nowrap">
-                <a class="nav-link" href="/registration">Sign Up</a>
-            </li>
-        </ul>
+        <a class="navbar-brand col-md-3 col-lg-2 mr-0 px-3" href="">SDCC</a>
+
+        {{if eq .Status "not-logged"}}
+
+            <ul class="navbar-nav px-3">
+                <li class="nav-item text-nowrap">
+                    <a class="nav-link" href="/loginPage">Login</a>
+                </li>
+            </ul>
+
+        {{else}}
+
+            <ul class="navbar-nav px-3">
+                <li class="nav-item text-nowrap">
+                    <a class="nav-link" href="/logout">Logout</a>
+                </li>
+            </ul>
+
+        {{end}}
     </nav>
 
     <div class="container-fluid">
         <div class="row">
-            <nav id="sidebarMenu" class="col-md-3 col-lg-2 d-md-block bg-light sidebar collapse">
-                <div class="sidebar-sticky pt-3">
-                    <ul class="nav flex-column">
-                        <li class="nav-item">
-                            <a class="nav-link" href="publish.html">
-                                <span data-feather="send"></span>
-                                Publish Message <span class="sr-only"></span>
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="subscribe.html">
-                                <span data-feather="file"></span>
-                                Topic Subscription
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="notifications.html">
-                                <span data-feather="message-square"></span>
-                                Notifications
-                            </a>
-                        </li>
-                    </ul>
-                </div>
-            </nav>
 
-            <main role="main" class="col-md-9 ml-sm-auto col-lg-10 px-md-4">
+            {{if eq .Status "logged"}}
 
-                {{template "body" . }}
+                <nav id="sidebarMenu" class="col-md-3 col-lg-2 d-md-block bg-light sidebar collapse">
+                    <div class="sidebar-sticky pt-3">
+                        <ul class="nav flex-column">
+                            <li class="nav-item">
+                                <a class="nav-link" href="/publish">
+                                    <span data-feather="send"></span>
+                                    Publish Message <span class="sr-only"></span>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" href="/subscribe">
+                                    <span data-feather="file"></span>
+                                    Topic Subscription
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" href="/notifications">
+                                    <span data-feather="message-square"></span>
+                                    Notifications
+                                </a>
+                            </li>
+                        </ul>
+                    </div>
+                </nav>
 
-            </main>
+            {{end}}
+
+            {{template "body" . }}
+
         </div>
     </div>
-
     </body>
     </html>
-
-    <script>
-        var x = document.cookie;
-        var value;
-        console.log(x)
-        if (x === '') {
-            value = 'hidden'
-        } else {
-            console.log('visible')
-            value = 'visible'
-        }
-        document.getElementById("sidebarMenu").style.visibility = value;
-    </script>
-
+    <script>window.jQuery || document.write('<script src="/static/js/vendor/jquery.slim.min.js"><\/script>')</script>
     <script src="/static/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/feather-icons/4.9.0/feather.min.js"></script>
     <script src="/static/js/dashboard.js"></script>

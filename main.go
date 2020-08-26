@@ -1,4 +1,4 @@
-// websockets.go
+// main.go
 package main
 
 import (
@@ -9,24 +9,16 @@ import (
 	_ "github.com/gorilla/sessions"
 	"github.com/gorilla/websocket"
 	_ "github.com/lib/pq"
-	"golang.org/x/crypto/bcrypt"
-	"html/template"
 	"log"
 	"math/rand"
 	"net/http"
-	"path/filepath"
 	"sync"
 	"time"
 )
 
-type Todo struct {
-	Title string
-	Done  bool
-}
-
-type TodoPageData struct {
-	PageTitle string
-	Todos     []Todo
+type Object struct {
+	Status string
+	Data   interface{}
 }
 
 type server struct {
@@ -116,87 +108,6 @@ func publisTo(topic string, data string) {
 	}
 }
 
-func (s *server) notifications(res http.ResponseWriter, req *http.Request) {
-
-	lp := filepath.Join("templates", "layout.html")
-	fp := filepath.Join("templates", "notifications.html")
-
-	tmpl := template.Must(template.ParseFiles(lp, fp))
-
-	data := TodoPageData{
-		PageTitle: "My TODO list",
-		Todos: []Todo{
-			{Title: "Task 1", Done: false},
-			{Title: "Task 2", Done: true},
-			{Title: "Task 3", Done: true},
-		},
-	}
-
-	//tmpl.Execute(res, data)
-	tmpl.ExecuteTemplate(res, "layout", data)
-
-	return
-
-}
-
-func (s *server) signupPage(res http.ResponseWriter, req *http.Request) {
-
-	if req.Method != "POST" {
-		lp := filepath.Join("templates", "layout.html")
-		fp := filepath.Join("templates", "registration.html")
-
-		tmpl, _ := template.ParseFiles(lp, fp)
-		tmpl.ExecuteTemplate(res, "layout", nil)
-		return
-	}
-
-	username := req.FormValue("username")
-	password := req.FormValue("password")
-	email := req.FormValue("email")
-
-	var user string
-
-	err := s.db.QueryRow("SELECT email FROM users WHERE email=$1", email).Scan(&user)
-
-	switch {
-	case err == sql.ErrNoRows:
-
-		hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
-
-		if err != nil {
-			http.Error(res, "Server error, unable to create your account.", 500)
-			return
-		}
-
-		sqlStatement := `
-			INSERT INTO users (email, username, password)
-			VALUES ($1, $2, $3)`
-
-		_, err = s.db.Exec(sqlStatement, email, username, hashedPassword)
-
-		if err != nil {
-			panic(err)
-		}
-
-		http.Redirect(res, req, "/index", 301)
-
-		return
-
-	case err != nil:
-
-		res.Write([]byte("User error 1!"))
-		http.Error(res, "Server error, unable to create your account.", 500)
-
-		return
-
-	default:
-
-		http.Redirect(res, req, "/registrationError", 301)
-
-		return
-	}
-}
-
 func (s *server) publish(res http.ResponseWriter, req *http.Request) {
 
 	/*// We can obtain the session token from the requests cookies, which come with every request
@@ -229,59 +140,18 @@ func (s *server) publish(res http.ResponseWriter, req *http.Request) {
 	res.Write([]byte(fmt.Sprintf("Welcomeeeeeee %s!", response)))*/
 }
 
-func (s *server) index(res http.ResponseWriter, req *http.Request) {
+func (s *server) notifications(res http.ResponseWriter, req *http.Request) {
 
 	session, _ := store.Get(req, "cookie-name")
 
-	if req.Method != "POST" {
+	// Check if user is authenticated
+	if auth, ok := session.Values["authenticated"].(bool); !ok || !auth {
 
-		lp := filepath.Join("templates", "layout.html")
-		fp := filepath.Join("templates", "signin.html")
-
-		tmpl, _ := template.ParseFiles(lp, fp)
-		tmpl.ExecuteTemplate(res, "layout", nil)
-	}
-
-	email := req.FormValue("email")
-	password := req.FormValue("password")
-
-	var databaseEmail string
-	var databasePassword string
-
-	err := s.db.QueryRow("SELECT email, password FROM users WHERE email=$1", email).Scan(&databaseEmail, &databasePassword)
-
-	if err != nil {
-		http.Redirect(res, req, "/index", 301)
+		http.Redirect(res, req, "/", http.StatusForbidden)
 		return
 	}
 
-	err = bcrypt.CompareHashAndPassword([]byte(databasePassword), []byte(password))
-	if err != nil {
-		http.Redirect(res, req, "/index", 301)
-		return
-	}
-
-	session.Values["authenticated"] = true
-	session.Save(req, res)
-
-	http.Redirect(res, req, "/notifications", 301)
-
-	return
-}
-
-//TODO refresh
-
-func logout(res http.ResponseWriter, req *http.Request) {
-
-	session, _ := store.Get(req, "cookie-name")
-
-	// Revoke users authentication
-	session.Values["authenticated"] = false
-	session.Save(req, res)
-
-	res.Write([]byte(fmt.Sprint("OK")))
-	//http.Redirect(res, req, "/notifications", 301)
-
+	redirecter(res, req, "notifications.html")
 }
 
 func main() {
@@ -310,12 +180,12 @@ func main() {
 	fs := http.FileServer(http.Dir("./static"))
 	http.Handle("/static/", http.StripPrefix("/static/", fs))
 
-	http.HandleFunc("/", s.index)
-	http.HandleFunc("/logout", logout)
-	//http.HandleFunc("/refresh", Refresh)
-	http.HandleFunc("/registration", s.signupPage)
+	http.HandleFunc("/", loginPage)
+	http.HandleFunc("/registration", s.registration)
+	http.HandleFunc("/registrationPage", registrationPage)
 	http.HandleFunc("/registrationError", registrationError)
-	http.HandleFunc("/publish", s.publish)
+	http.HandleFunc("/login", s.login)
+	http.HandleFunc("/logout", logout)
 	http.HandleFunc("/notifications", s.notifications)
 
 	/*http.HandleFunc("/websocket", func(w http.ResponseWriter, r *http.Request) {
@@ -339,20 +209,8 @@ func main() {
 	})*/
 
 	log.Println("Listening on :8080...")
-	err3 := http.ListenAndServe(":8080", nil)
-	if err3 != nil {
+	err = http.ListenAndServe(":8080", nil)
+	if err != nil {
 		log.Fatal(err)
 	}
-
-	http.ListenAndServe(":8080", nil)
-
-}
-
-func registrationError(w http.ResponseWriter, r *http.Request) {
-
-	lp := filepath.Join("templates", "layout.html")
-	fp := filepath.Join("templates", "registrationError.html")
-
-	tmpl, _ := template.ParseFiles(lp, fp)
-	tmpl.ExecuteTemplate(w, "layout", nil)
 }
