@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"fmt"
 	_ "github.com/gomodule/redigo/redis"
-	"github.com/gorilla/sessions"
 	_ "github.com/gorilla/sessions"
 	"github.com/gorilla/websocket"
 	_ "github.com/lib/pq"
@@ -24,12 +23,6 @@ type Object struct {
 type server struct {
 	db *sql.DB
 }
-
-var (
-	// key must be 16, 24 or 32 bytes long (AES-128, AES-192 or AES-256)
-	key   = []byte("super-secret-key")
-	store = sessions.NewCookieStore(key)
-)
 
 type User struct {
 	Firstname string `json:"firstname"`
@@ -142,7 +135,7 @@ func (s *server) publish(res http.ResponseWriter, req *http.Request) {
 
 func (s *server) notifications(res http.ResponseWriter, req *http.Request) {
 
-	session, _ := store.Get(req, "cookie-name")
+	session, _ := store.Get(req, "session")
 
 	// Check if user is authenticated
 	if auth, ok := session.Values["authenticated"].(bool); !ok || !auth {
@@ -155,6 +148,8 @@ func (s *server) notifications(res http.ResponseWriter, req *http.Request) {
 }
 
 func main() {
+
+	initSession()
 
 	psqlInfo := fmt.Sprintf("host=%s port=%d user=%s "+
 		"password=%s dbname=%s sslmode=disable",
@@ -177,7 +172,7 @@ func main() {
 
 	s := server{db: db}
 
-	fs := http.FileServer(http.Dir("./static"))
+	fs := http.FileServer(http.Dir("../static"))
 	http.Handle("/static/", http.StripPrefix("/static/", fs))
 
 	http.HandleFunc("/", loginPage)

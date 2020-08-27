@@ -2,11 +2,26 @@ package main
 
 import (
 	"database/sql"
+	"github.com/gorilla/sessions"
 	"golang.org/x/crypto/bcrypt"
 	"html/template"
 	"net/http"
 	"path/filepath"
 )
+
+var (
+	// key must be 16, 24 or 32 bytes long (AES-128, AES-192 or AES-256)
+	key   = []byte("super-secret-key")
+	store = sessions.NewCookieStore(key)
+)
+
+func initSession() {
+	store = sessions.NewCookieStore(key)
+	store.Options = &sessions.Options{
+		Path:   "/",
+		MaxAge: 60,
+	}
+}
 
 func registrationPage(res http.ResponseWriter, req *http.Request) {
 
@@ -14,8 +29,8 @@ func registrationPage(res http.ResponseWriter, req *http.Request) {
 		Status: "not-logged",
 	}
 
-	lp := filepath.Join("templates", "layout.html")
-	fp := filepath.Join("templates", "registration.html")
+	lp := filepath.Join("../templates", "layout.html")
+	fp := filepath.Join("../templates", "registration.html")
 
 	tmpl, _ := template.ParseFiles(lp, fp)
 	tmpl.ExecuteTemplate(res, "layout", data)
@@ -70,8 +85,8 @@ func (s *server) registration(res http.ResponseWriter, req *http.Request) {
 
 func registrationError(w http.ResponseWriter, r *http.Request) {
 
-	lp := filepath.Join("templates", "layout.html")
-	fp := filepath.Join("templates", "registrationError.html")
+	lp := filepath.Join("../templates", "layout.html")
+	fp := filepath.Join("../templates", "registrationError.html")
 
 	tmpl, _ := template.ParseFiles(lp, fp)
 	tmpl.ExecuteTemplate(w, "layout", nil)
@@ -83,8 +98,8 @@ func loginPage(res http.ResponseWriter, req *http.Request) {
 		Status: "not-logged",
 	}
 
-	lp := filepath.Join("templates", "layout.html")
-	fp := filepath.Join("templates", "login.html")
+	lp := filepath.Join("../templates", "layout.html")
+	fp := filepath.Join("../templates", "login.html")
 
 	tmpl, _ := template.ParseFiles(lp, fp)
 	tmpl.ExecuteTemplate(res, "layout", data)
@@ -92,7 +107,7 @@ func loginPage(res http.ResponseWriter, req *http.Request) {
 
 func (s *server) login(res http.ResponseWriter, req *http.Request) {
 
-	session, _ := store.Get(req, "cookie-name")
+	session, _ := store.New(req, "session")
 
 	email := req.FormValue("email")
 	password := req.FormValue("password")
@@ -122,18 +137,22 @@ func (s *server) login(res http.ResponseWriter, req *http.Request) {
 
 func logout(res http.ResponseWriter, req *http.Request) {
 
-	session, _ := store.Get(req, "cookie-name")
+	session, _ := store.Get(req, "session")
 
 	// Revoke users authentication
 	session.Values["authenticated"] = false
-	session.Save(req, res)
+
+	//delete(session.Values, "authenticated")
+	//session.Options.MaxAge = -1
+
+	_ = session.Save(req, res)
 
 	http.Redirect(res, req, "/", 301)
 }
 
 func redirecter(res http.ResponseWriter, req *http.Request, url string) {
 
-	session, _ := store.Get(req, "cookie-name")
+	session, _ := store.Get(req, "session")
 
 	// Check if user is authenticated
 	if auth, ok := session.Values["authenticated"].(bool); !ok || !auth {
@@ -146,11 +165,9 @@ func redirecter(res http.ResponseWriter, req *http.Request, url string) {
 		Status: "logged",
 	}
 
-	lp := filepath.Join("templates", "layout.html")
-	fp := filepath.Join("templates", url)
+	lp := filepath.Join("../templates", "layout.html")
+	fp := filepath.Join("../templates", url)
 
 	tmpl, _ := template.ParseFiles(lp, fp)
 	tmpl.ExecuteTemplate(res, "layout", data)
 }
-
-//TODO session manager
