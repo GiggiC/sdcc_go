@@ -2,60 +2,87 @@
 
 {{define "body"}}
 
-<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
-    <h1 class="h2">Topic Subscription</h1>
-</div>
+    <main role="main" class="col-md-9 ml-sm-auto col-lg-10 px-md-4">
 
-<div class="row">
+        <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+            <h1 class="h2">Topic Subscription</h1>
+        </div>
 
-    <div class="col-md-12 order-md-1">
-        <form class="needs-validation" novalidate>
+        {{/*<h1>{{.PageTitle}}</h1>
+    <ul>
+        {{range .Todos}}
+            {{if .Done}}
+                <li class="done">{{.Title}}</li>
+            {{else}}
+                <li>{{.Title}}</li>
+            {{end}}
+        {{end}}
+    </ul>*/}}
 
-            <div class="custom-control custom-checkbox">
-                <input type="checkbox" class="custom-control-input" id="same-address">
-                <label class="custom-control-label" for="same-address">Topic 1</label>
-            </div>
 
-            <div class="custom-control custom-checkbox">
-                <input type="checkbox" class="custom-control-input" id="same-address">
-                <label class="custom-control-label" for="same-address">Topic 2</label>
-            </div>
+        <table id="example" class="table table-striped">
+            <thead>
+            <tr>
+                <th scope="col">#</th>
+                <th scope="col">Topic Name</th>
+                <th scope="col">Handle</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr>
+                <th scope="row">1</th>
+                <td>Topic 1</td>
+                <td><label class="switch">
+                        <input type="checkbox" value="Topic 1" onclick="submitSubscription('Topic 1')">
+                        <span class="slider round"></span>
+                    </label>
+                </td>
+            </tr>
+            <tr>
+                <th scope="row">2</th>
+                <td>Topic 2</td>
+                <td><label class="switch">
+                        <input type="checkbox" value="Topic 2" onclick="submitSubscription('Topic 2')">
+                        <span class="slider round"></span>
+                    </label>
+                </td>
+            </tr>
+            <tr>
+                <th scope="row">3</th>
+                <td>Topic 3</td>
+                <td><label class="switch">
+                        <input type="checkbox" value="Topic 3" onclick="submitSubscription('Topic 3')">
+                        <span class="slider round"></span>
+                    </label>
+                </td>
+            </tr>
+            <tr>
+                <th scope="row">4</th>
+                <td>Topic 4</td>
+                <td><label class="switch">
+                        <input type="checkbox" value="Topic 4" onclick="submitSubscription('Topic 4')">
+                        <span class="slider round"></span>
+                    </label>
+                </td>
+            </tr>
+            </tbody>
+        </table>
 
-            <div class="custom-control custom-checkbox">
-                <input type="checkbox" class="custom-control-input" id="same-address">
-                <label class="custom-control-label" for="same-address">Topic 3</label>
-            </div>
+        <script>
+            $(document).ready(function () {
+                $('#example').DataTable();
+            });
+        </script>
 
-            <div class="custom-control custom-checkbox">
-                <input type="checkbox" class="custom-control-input" id="same-address">
-                <label class="custom-control-label" for="same-address">Topic 4</label>
-            </div>
+        <script>
+            function submitSubscription(topic) {
 
-            <hr class="mb-4">
-            <button class="btn btn-primary btn-lg btn-block" type="submit" onclick="send()">Subscribe
-            </button>
-        </form>
-    </div>
-</div>
+                window.location.href = "/subscribe?topic=" + topic;
+                //window.history.pushState('page2', 'Title', "/subscribe?topic=" + topic);
 
-<script>
-    var message = document.getElementById("message");
-    var topic = document.getElementById("topic");
-    var socket = new WebSocket("ws://localhost:8080/websocket");
+            }
+        </script>
 
-    function send() {
+    </main>
+{{end}}
 
-        var data = JSON.stringify({"Message": message.value, "Topic": topic.value});
-
-        socket.send(data);
-        message.value = "";
-        topic.value = "";
-    }
-</script>
-<script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"
-        integrity="sha384-DfXdz2htPH0lsSSs5nCTpuj/zy4C+OGpamoFVy38MVBnE+IbbVYUew+OrCXaRkfj"
-        crossorigin="anonymous"></script>
-<script>window.jQuery || document.write('<script src="/static/js/vendor/jquery.slim.min.js"><\/script>')</script>
-<script src="/static/js/bootstrap.bundle.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/feather-icons/4.9.0/feather.min.js"></script>
-<script src="/static/js/dashboard.js"></script>{{end}}

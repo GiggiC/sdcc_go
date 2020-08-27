@@ -129,6 +129,7 @@ func (s *server) login(res http.ResponseWriter, req *http.Request) {
 	}
 
 	session.Values["authenticated"] = true
+	session.Values["user"] = databaseEmail
 	session.Save(req, res)
 
 	//TODO 301

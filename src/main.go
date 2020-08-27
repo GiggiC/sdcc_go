@@ -94,43 +94,11 @@ func printDataEvent(ch string, data DataEvent) {
 	fmt.Printf("Channel: %s; Topic: %s; DataEvent: %v\n", ch, data.Topic, data.Message)
 }
 
-func publisTo(topic string, data string) {
+func publishTo(topic string, data string) {
 	for {
 		eb.Publish(topic, data)
 		time.Sleep(time.Duration(rand.Intn(1000)) * time.Millisecond)
 	}
-}
-
-func (s *server) publish(res http.ResponseWriter, req *http.Request) {
-
-	/*// We can obtain the session token from the requests cookies, which come with every request
-	c, err := req.Cookie("session_token")
-	if err != nil {
-		if err == http.ErrNoCookie {
-			// If the cookie is not set, return an unauthorized status
-			res.WriteHeader(http.StatusUnauthorized)
-			return
-		}
-		// For any other type of error, return a bad request status
-		res.WriteHeader(http.StatusBadRequest)
-		return
-	}
-	sessionToken := c.Value
-
-	// We then get the name of the user from our cache, where we set the session token
-	response, err := cache.Do("GET", sessionToken)
-	if err != nil {
-		// If there is an error fetching from cache, return an internal server error status
-		res.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-	if response == nil {
-		// If the session token is not present in cache, return an unauthorized error
-		res.WriteHeader(http.StatusUnauthorized)
-		return
-	}
-	// Finally, return the welcome message to the user
-	res.Write([]byte(fmt.Sprintf("Welcomeeeeeee %s!", response)))*/
 }
 
 func (s *server) notifications(res http.ResponseWriter, req *http.Request) {
@@ -145,6 +113,84 @@ func (s *server) notifications(res http.ResponseWriter, req *http.Request) {
 	}
 
 	redirecter(res, req, "notifications.html")
+}
+
+func subscriptionPage(res http.ResponseWriter, req *http.Request) {
+
+	redirecter(res, req, "subscribe.html")
+}
+
+func (s *server) subscribe(res http.ResponseWriter, req *http.Request) {
+
+	topics, ok := req.URL.Query()["topic"]
+	session, _ := store.Get(req, "session")
+	subscriber := fmt.Sprintf("%v", session.Values["user"])
+
+	if !ok || len(topics[0]) < 1 {
+		log.Println("Url Param 'key' is missing")
+		return
+	}
+
+	// Query()["key"] will return an array of items,
+	// we only want the single item.
+	topic := topics[0]
+
+	sqlStatement := `
+			INSERT INTO subscriptions (subscriber, topic)
+			VALUES ($1, $2)`
+
+	_, err := s.db.Exec(sqlStatement, subscriber, topic)
+
+	if err != nil {
+		panic(err)
+	}
+	//TODO 301
+	redirecter(res, req, "subscribe.html")
+}
+
+func publishPage(res http.ResponseWriter, req *http.Request) {
+
+	redirecter(res, req, "publish.html")
+}
+
+func (s *server) publish(res http.ResponseWriter, req *http.Request) {
+
+	conn, _ := upgrader.Upgrade(res, req, nil) // error ignored for sake of simplicity
+
+	session, _ := store.Get(req, "session")
+	publisher := fmt.Sprintf("%v", session.Values["user"])
+
+	for {
+
+		var object DataEvent
+
+		err := conn.ReadJSON(&object)
+
+		if err != nil {
+			fmt.Println("Error reading json.", err)
+		}
+
+		fmt.Printf("Got message: %#v\n", object)
+
+		if err = conn.WriteJSON(object); err != nil {
+			fmt.Println(err)
+		}
+
+		fmt.Print(object.Topic)
+
+		sqlStatement := `
+			INSERT INTO messages (payload, publisher,topic)
+			VALUES ($1, $2, $3)`
+
+		_, err = s.db.Exec(sqlStatement, object.Message, publisher, object.Topic)
+
+		if err != nil {
+			panic(err)
+		}
+	}
+
+	//TODO 301
+	//http.Redirect(res, req, "/notifications", 301)
 }
 
 func main() {
@@ -182,26 +228,11 @@ func main() {
 	http.HandleFunc("/login", s.login)
 	http.HandleFunc("/logout", logout)
 	http.HandleFunc("/notifications", s.notifications)
+	http.HandleFunc("/publishPage", publishPage)
+	http.HandleFunc("/subscriptionPage", subscriptionPage)
+	http.HandleFunc("/subscribe", s.subscribe)
 
-	/*http.HandleFunc("/websocket", func(w http.ResponseWriter, r *http.Request) {
-		conn, _ := upgrader.Upgrade(w, r, nil) // error ignored for sake of simplicity
-
-		for {
-
-			var object DataEvent
-
-			err := conn.ReadJSON(&object)
-			if err != nil {
-				fmt.Println("Error reading json.", err)
-			}
-
-			fmt.Printf("Got message: %#v\n", object)
-
-			if err = conn.WriteJSON(object); err != nil {
-				fmt.Println(err)
-			}
-		}
-	})*/
+	http.HandleFunc("/websocket", s.publish)
 
 	log.Println("Listening on :8080...")
 	err = http.ListenAndServe(":8080", nil)

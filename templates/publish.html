@@ -2,17 +2,18 @@
 
 {{define "body"}}
 
-    <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
-        <h1 class="h2">Publish Message</h1>
-    </div>
+    <main role="main" class="col-md-9 ml-sm-auto col-lg-10 px-md-4">
 
-    <div class="row">
+        <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+            <h1 class="h2">Publish</h1>
+        </div>
 
-        <div class="col-md-12 order-md-1">
-            <form class="needs-validation" novalidate>
+        <div class="row">
+
+            <div class="col-md-12 order-md-1">
                 <div class="row">
                     <div class="col-md-6 mb-3">
-                        <label for="firstName">Message</label>
+                        <label for="message">Message</label>
                         <input type="text" class="form-control" id="message" placeholder="" value="" required>
                         <div class="invalid-feedback">
                             Valid first name is required.
@@ -21,12 +22,12 @@
 
                     <div class="col-md-6 mb-3">
                         <label for="country">Topic</label>
-                        <select class="custom-select d-block w-100" id="country" required>
+                        <select class="custom-select d-block w-100" id="topic" required>
                             <option value="">Choose...</option>
-                            <option>Topic 1</option>
-                            <option>Topic 2</option>
-                            <option>Topic 3</option>
-                            <option>Topic 4</option>
+                            <option value="Topic 1">Topic 1</option>
+                            <option value="Topic 2">Topic 2</option>
+                            <option value="Topic 3">Topic 3</option>
+                            <option value="Topic 4">Topic 4</option>
                         </select>
                         <div class="invalid-feedback">
                             Please select a valid Topic.
@@ -34,26 +35,30 @@
                     </div>
 
                 </div>
-
                 <hr class="mb-4">
-                <button class="btn btn-primary btn-lg btn-block" type="submit" onclick="send()">Send Message
+                <button class="btn btn-primary btn-lg btn-block" onclick="send()">Send Message
                 </button>
-            </form>
+            </div>
         </div>
-    </div>
+    </main>
 
     <script>
-        var message = document.getElementById("message");
-        var topic = document.getElementById("topic");
+
         var socket = new WebSocket("ws://localhost:8080/websocket");
+        //var e = document.getElementById("topic");
+        //var result = e.options[e.selectedIndex].text;
+
 
         function send() {
 
-            var data = JSON.stringify({"Message": message.value, "Topic": topic.value});
+            const result = $("#topic :selected").text(); // The text content of the selected option
+
+            console.log(result);
+
+            var data = JSON.stringify({"Message": message.value, "Topic": result});
 
             socket.send(data);
             message.value = "";
-            topic.value = "";
         }
     </script>
 {{end}}
