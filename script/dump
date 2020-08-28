@@ -1,0 +1,241 @@
+--
+-- PostgreSQL database dump
+--
+
+-- Dumped from database version 11.7 (Ubuntu 11.7-0ubuntu0.19.10.1)
+-- Dumped by pg_dump version 11.7 (Ubuntu 11.7-0ubuntu0.19.10.1)
+
+SET statement_timeout = 0;
+SET lock_timeout = 0;
+SET idle_in_transaction_session_timeout = 0;
+SET client_encoding = 'UTF8';
+SET standard_conforming_strings = on;
+SELECT pg_catalog.set_config('search_path', '', false);
+SET check_function_bodies = false;
+SET xmloption = content;
+SET client_min_messages = warning;
+SET row_security = off;
+
+DROP DATABASE IF EXISTS sdcc;
+--
+-- Name: sdcc; Type: DATABASE; Schema: -; Owner: postgres
+--
+
+CREATE DATABASE sdcc WITH TEMPLATE = template0 ENCODING = 'UTF8' LC_COLLATE = 'it_IT.UTF-8' LC_CTYPE = 'it_IT.UTF-8';
+
+
+ALTER DATABASE sdcc OWNER TO postgres;
+
+\connect sdcc
+
+SET statement_timeout = 0;
+SET lock_timeout = 0;
+SET idle_in_transaction_session_timeout = 0;
+SET client_encoding = 'UTF8';
+SET standard_conforming_strings = on;
+SELECT pg_catalog.set_config('search_path', '', false);
+SET check_function_bodies = false;
+SET xmloption = content;
+SET client_min_messages = warning;
+SET row_security = off;
+
+SET default_tablespace = '';
+
+SET default_with_oids = false;
+
+--
+-- Name: messages; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.messages (
+    payload text,
+    publisher text,
+    topic text,
+    id integer NOT NULL
+);
+
+
+ALTER TABLE public.messages OWNER TO postgres;
+
+--
+-- Name: messages_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
+--
+
+CREATE SEQUENCE public.messages_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE public.messages_id_seq OWNER TO postgres;
+
+--
+-- Name: messages_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
+--
+
+ALTER SEQUENCE public.messages_id_seq OWNED BY public.messages.id;
+
+
+--
+-- Name: subscriptions; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.subscriptions (
+    subscriber text NOT NULL,
+    topic text NOT NULL
+);
+
+
+ALTER TABLE public.subscriptions OWNER TO postgres;
+
+--
+-- Name: topics; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.topics (
+    name text NOT NULL
+);
+
+
+ALTER TABLE public.topics OWNER TO postgres;
+
+--
+-- Name: users; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.users (
+    email text NOT NULL,
+    password text,
+    username text
+);
+
+
+ALTER TABLE public.users OWNER TO postgres;
+
+--
+-- Name: messages id; Type: DEFAULT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.messages ALTER COLUMN id SET DEFAULT nextval('public.messages_id_seq'::regclass);
+
+
+--
+-- Data for Name: messages; Type: TABLE DATA; Schema: public; Owner: postgres
+--
+
+COPY public.messages (payload, publisher, topic, id) FROM stdin;
+ciao	l.corsi@hotmail.it	Topic 2	2
+ciao	l.corsi@hotmail.it	Topic 3	3
+ciao	l.corsi@hotmail.it	Topic 2	4
+\.
+
+
+--
+-- Data for Name: subscriptions; Type: TABLE DATA; Schema: public; Owner: postgres
+--
+
+COPY public.subscriptions (subscriber, topic) FROM stdin;
+l.corsi@hotmail.it	Topic 1
+l.corsi@hotmail.it	Topic 3
+\.
+
+
+--
+-- Data for Name: topics; Type: TABLE DATA; Schema: public; Owner: postgres
+--
+
+COPY public.topics (name) FROM stdin;
+Topic 1
+Topic 2
+Topic 3
+Topic 4
+\.
+
+
+--
+-- Data for Name: users; Type: TABLE DATA; Schema: public; Owner: postgres
+--
+
+COPY public.users (email, password, username) FROM stdin;
+l.corsi@hotmail.it	$2a$10$58Qe.3wC7FKPVgKXY6SQuOpRxWI5e868FG3efH/90rpUywD.VJcd.	giggix
+\.
+
+
+--
+-- Name: messages_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
+--
+
+SELECT pg_catalog.setval('public.messages_id_seq', 18, true);
+
+
+--
+-- Name: messages messages_pk; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.messages
+    ADD CONSTRAINT messages_pk PRIMARY KEY (id);
+
+
+--
+-- Name: subscriptions subscriptions_pk; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.subscriptions
+    ADD CONSTRAINT subscriptions_pk PRIMARY KEY (subscriber, topic);
+
+
+--
+-- Name: topics topics_pk; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.topics
+    ADD CONSTRAINT topics_pk PRIMARY KEY (name);
+
+
+--
+-- Name: users users_pk; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.users
+    ADD CONSTRAINT users_pk PRIMARY KEY (email);
+
+
+--
+-- Name: messages messages_topics_name_fk; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.messages
+    ADD CONSTRAINT messages_topics_name_fk FOREIGN KEY (topic) REFERENCES public.topics(name);
+
+
+--
+-- Name: messages messages_users_email_fk; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.messages
+    ADD CONSTRAINT messages_users_email_fk FOREIGN KEY (publisher) REFERENCES public.users(email);
+
+
+--
+-- Name: subscriptions subscriptions_topics_name_fk; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.subscriptions
+    ADD CONSTRAINT subscriptions_topics_name_fk FOREIGN KEY (topic) REFERENCES public.topics(name);
+
+
+--
+-- Name: subscriptions subscriptions_users_email_fk; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.subscriptions
+    ADD CONSTRAINT subscriptions_users_email_fk FOREIGN KEY (subscriber) REFERENCES public.users(email);
+
+
+--
+-- PostgreSQL database dump complete
+--
+
