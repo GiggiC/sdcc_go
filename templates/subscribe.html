@@ -30,10 +30,15 @@
             <tbody>
             {{range .Data}}
                 <tr>
-                    <td>{{.}}</td>
+                    <td>{{.Name}}</td>
                     <td><label class="switch">
-                            <input type="checkbox" value="Topic 1" onclick="submitSubscription('Topic 1')">
-                            <span class="slider round"></span>
+                            {{if eq .Flag true}}
+                                <input type="checkbox" onclick="submitSubscription({{.Name}}, {{.Flag}})" checked>
+                                <span class="slider round"></span>
+                            {{else}}
+                                <input type="checkbox" onclick="submitSubscription({{.Name}}, {{.Flag}})">
+                                <span class="slider round"></span>
+                            {{end}}
                         </label>
                     </td>
                 </tr>
@@ -47,21 +52,45 @@
             });
         </script>
 
+        {{/*<script>
+            function submitSubscription(topic, flag) {
+
+                if (flag) {
+
+                    location.href="/unsubscribe?topic=" + topic
+                } else {
+
+                    window.location.href="/subscribe?topic=" + topic
+                }
+            }
+        </script>*/}}
+
         <script>
-            function submitSubscription(topic) {
+            function submitSubscription(topic, flag) {
 
-                //window.location.href = "/subscribe?topic=" + topic;
-                //window.history.pushState('page2', 'Title', "/subscribe?topic=" + topic);
+                if (flag) {
+                    $.ajax({
+                        url: "/unsubscribe",
+                        data: {topic: topic}, //If the request needs any data
+                        success: function(){
+                            window.location.href = '/subscriptionPage'
 
-                $.ajax({
-                    url: "/subscribe",
-                    data: {topic: topic} //If the request needs any data
-                }).done(function (data) {
-                    // Do whatever with returned data
-                });
+                        }
+                    }).done(function (data) {
+                    });
+                } else {
+                    $.ajax({
+                        url: "/subscribe",
+                        data: {topic: topic}, //If the request needs any data
+                        success: function(){
+                            window.location.href = '/subscriptionPage'
+                        }
+                    }).done(function (data) {
+                        // Do whatever with returned data
+                    });
+                }
             }
         </script>
-
     </main>
 {{end}}
 

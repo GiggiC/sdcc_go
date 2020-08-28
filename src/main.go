@@ -24,6 +24,11 @@ type Message struct {
 	Payload, Publisher, Topic string
 }
 
+type Topic struct {
+	Name string
+	Flag bool
+}
+
 type server struct {
 	db *sql.DB
 }
@@ -162,13 +167,30 @@ func (s *server) subscriptionPage(res http.ResponseWriter, req *http.Request) {
 		panic(err)
 	}
 
-	var results []string
+	tRes := Topic{}
+	var results []Topic
 
 	for data.Next() {
-		var subscriber string
-		data.Scan(&subscriber)
-		var item = subscriber
-		results = append(results, item)
+		var name string
+		data.Scan(&name)
+		tRes.Name = name
+		tRes.Flag = true
+		results = append(results, tRes)
+	}
+
+	data, err = s.db.Query("select t.name from topics t where t.name "+
+		"not in (select s.topic from subscriptions s where s.subscriber = $1)", email)
+
+	if err != nil {
+		panic(err)
+	}
+
+	for data.Next() {
+		var name string
+		data.Scan(&name)
+		tRes.Name = name
+		tRes.Flag = false
+		results = append(results, tRes)
 	}
 
 	redirecter(res, req, "subscribe.html", results)
@@ -176,12 +198,13 @@ func (s *server) subscriptionPage(res http.ResponseWriter, req *http.Request) {
 
 func (s *server) subscribe(res http.ResponseWriter, req *http.Request) {
 
+	fmt.Print("IN")
 	topics, ok := req.URL.Query()["topic"]
 	session, _ := store.Get(req, "session")
 	subscriber := fmt.Sprintf("%v", session.Values["user"])
 
 	if !ok || len(topics[0]) < 1 {
-		log.Println("Url Param 'key' is missing")
+		log.Println("Url Param 'session' is missing")
 		return
 	}
 
@@ -199,7 +222,35 @@ func (s *server) subscribe(res http.ResponseWriter, req *http.Request) {
 		panic(err)
 	}
 
-	redirecter(res, req, "/", nil)
+	http.Redirect(res, req, "/subscriptionPage", 301)
+}
+
+func (s *server) unsubscribe(res http.ResponseWriter, req *http.Request) {
+
+	fmt.Print("un")
+	topics, ok := req.URL.Query()["topic"]
+	session, _ := store.Get(req, "session")
+	subscriber := fmt.Sprintf("%v", session.Values["user"])
+
+	if !ok || len(topics[0]) < 1 {
+		log.Println("Url Param 'session' is missing")
+		return
+	}
+
+	// Query()["key"] will return an array of items,
+	// we only want the single item.
+	topic := topics[0]
+
+	sqlStatement := `
+			DELETE FROM subscriptions WHERE subscriber = $1 AND topic = $2`
+
+	_, err := s.db.Exec(sqlStatement, subscriber, topic)
+
+	if err != nil {
+		panic(err)
+	}
+
+	http.Redirect(res, req, "/subscriptionPage", 301)
 }
 
 func publishPage(res http.ResponseWriter, req *http.Request) {
@@ -288,6 +339,7 @@ func main() {
 	http.HandleFunc("/publishPage", publishPage)
 	http.HandleFunc("/subscriptionPage", s.subscriptionPage)
 	http.HandleFunc("/subscribe", s.subscribe)
+	http.HandleFunc("/unsubscribe", s.unsubscribe)
 
 	http.HandleFunc("/websocket", s.publish)
 
