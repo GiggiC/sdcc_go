@@ -20,6 +20,10 @@ type Object struct {
 	Data   interface{}
 }
 
+type Message struct {
+	Payload, Publisher, Topic string
+}
+
 type server struct {
 	db *sql.DB
 }
@@ -103,21 +107,71 @@ func publishTo(topic string, data string) {
 
 func (s *server) notifications(res http.ResponseWriter, req *http.Request) {
 
+	checkSession(res, req)
+
 	session, _ := store.Get(req, "session")
+	email := fmt.Sprintf("%v", session.Values["user"])
 
-	// Check if user is authenticated
-	if auth, ok := session.Values["authenticated"].(bool); !ok || !auth {
+	/*var (
+		payload string
+		publisher string
+		topic string
+	)*/
 
-		http.Redirect(res, req, "/", http.StatusForbidden)
-		return
+	data, err := s.db.Query("SELECT m.payload, m.publisher, m.topic FROM messages m, subscriptions s "+
+		"WHERE m.topic = s.topic and s.subscriber = $1", email)
+
+	if err != nil {
+		panic(err)
 	}
 
-	redirecter(res, req, "notifications.html")
+	/*for data.Next() {
+		err := data.Scan(&payload, &publisher, &topic)
+		if err != nil {
+			log.Fatal(err)
+		}
+		log.Println(payload, publisher, topic)
+	}*/
+
+	tRes := Message{}
+	var results []Message
+
+	for data.Next() {
+		var payload, publisher, topic string
+		data.Scan(&payload, &publisher, &topic)
+		tRes.Payload = payload
+		tRes.Publisher = publisher
+		tRes.Topic = topic
+		results = append(results, tRes)
+	}
+
+	redirecter(res, req, "notifications.html", results)
 }
 
-func subscriptionPage(res http.ResponseWriter, req *http.Request) {
+func (s *server) subscriptionPage(res http.ResponseWriter, req *http.Request) {
 
-	redirecter(res, req, "subscribe.html")
+	checkSession(res, req)
+
+	session, _ := store.Get(req, "session")
+	email := fmt.Sprintf("%v", session.Values["user"])
+
+	data, err := s.db.Query("SELECT topic FROM subscriptions"+
+		" WHERE subscriber = $1", email)
+
+	if err != nil {
+		panic(err)
+	}
+
+	var results []string
+
+	for data.Next() {
+		var subscriber string
+		data.Scan(&subscriber)
+		var item = subscriber
+		results = append(results, item)
+	}
+
+	redirecter(res, req, "subscribe.html", results)
 }
 
 func (s *server) subscribe(res http.ResponseWriter, req *http.Request) {
@@ -144,13 +198,13 @@ func (s *server) subscribe(res http.ResponseWriter, req *http.Request) {
 	if err != nil {
 		panic(err)
 	}
-	//TODO 301
-	redirecter(res, req, "subscribe.html")
+
+	redirecter(res, req, "/", nil)
 }
 
 func publishPage(res http.ResponseWriter, req *http.Request) {
 
-	redirecter(res, req, "publish.html")
+	redirecter(res, req, "publish.html", nil)
 }
 
 func (s *server) publish(res http.ResponseWriter, req *http.Request) {
@@ -187,6 +241,9 @@ func (s *server) publish(res http.ResponseWriter, req *http.Request) {
 		if err != nil {
 			panic(err)
 		}
+
+		res.WriteHeader(200)
+
 	}
 
 	//TODO 301
@@ -229,7 +286,7 @@ func main() {
 	http.HandleFunc("/logout", logout)
 	http.HandleFunc("/notifications", s.notifications)
 	http.HandleFunc("/publishPage", publishPage)
-	http.HandleFunc("/subscriptionPage", subscriptionPage)
+	http.HandleFunc("/subscriptionPage", s.subscriptionPage)
 	http.HandleFunc("/subscribe", s.subscribe)
 
 	http.HandleFunc("/websocket", s.publish)

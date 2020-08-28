@@ -23,48 +23,21 @@
         <table id="example" class="table table-striped">
             <thead>
             <tr>
-                <th scope="col">#</th>
                 <th scope="col">Topic Name</th>
                 <th scope="col">Handle</th>
             </tr>
             </thead>
             <tbody>
-            <tr>
-                <th scope="row">1</th>
-                <td>Topic 1</td>
-                <td><label class="switch">
-                        <input type="checkbox" value="Topic 1" onclick="submitSubscription('Topic 1')">
-                        <span class="slider round"></span>
-                    </label>
-                </td>
-            </tr>
-            <tr>
-                <th scope="row">2</th>
-                <td>Topic 2</td>
-                <td><label class="switch">
-                        <input type="checkbox" value="Topic 2" onclick="submitSubscription('Topic 2')">
-                        <span class="slider round"></span>
-                    </label>
-                </td>
-            </tr>
-            <tr>
-                <th scope="row">3</th>
-                <td>Topic 3</td>
-                <td><label class="switch">
-                        <input type="checkbox" value="Topic 3" onclick="submitSubscription('Topic 3')">
-                        <span class="slider round"></span>
-                    </label>
-                </td>
-            </tr>
-            <tr>
-                <th scope="row">4</th>
-                <td>Topic 4</td>
-                <td><label class="switch">
-                        <input type="checkbox" value="Topic 4" onclick="submitSubscription('Topic 4')">
-                        <span class="slider round"></span>
-                    </label>
-                </td>
-            </tr>
+            {{range .Data}}
+                <tr>
+                    <td>{{.}}</td>
+                    <td><label class="switch">
+                            <input type="checkbox" value="Topic 1" onclick="submitSubscription('Topic 1')">
+                            <span class="slider round"></span>
+                        </label>
+                    </td>
+                </tr>
+            {{end}}
             </tbody>
         </table>
 
@@ -77,9 +50,15 @@
         <script>
             function submitSubscription(topic) {
 
-                window.location.href = "/subscribe?topic=" + topic;
+                //window.location.href = "/subscribe?topic=" + topic;
                 //window.history.pushState('page2', 'Title', "/subscribe?topic=" + topic);
 
+                $.ajax({
+                    url: "/subscribe",
+                    data: {topic: topic} //If the request needs any data
+                }).done(function (data) {
+                    // Do whatever with returned data
+                });
             }
         </script>
 

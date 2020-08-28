@@ -19,7 +19,7 @@ func initSession() {
 	store = sessions.NewCookieStore(key)
 	store.Options = &sessions.Options{
 		Path:   "/",
-		MaxAge: 60,
+		MaxAge: 120,
 	}
 }
 
@@ -151,7 +151,7 @@ func logout(res http.ResponseWriter, req *http.Request) {
 	http.Redirect(res, req, "/", 301)
 }
 
-func redirecter(res http.ResponseWriter, req *http.Request, url string) {
+func checkSession(res http.ResponseWriter, req *http.Request) {
 
 	session, _ := store.Get(req, "session")
 
@@ -161,9 +161,13 @@ func redirecter(res http.ResponseWriter, req *http.Request, url string) {
 		http.Redirect(res, req, "/", http.StatusForbidden)
 		return
 	}
+}
+
+func redirecter(res http.ResponseWriter, req *http.Request, url string, results interface{}) {
 
 	data := Object{
 		Status: "logged",
+		Data:   results,
 	}
 
 	lp := filepath.Join("../templates", "layout.html")
