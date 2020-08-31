@@ -117,26 +117,12 @@ func (s *server) notifications(res http.ResponseWriter, req *http.Request) {
 	session, _ := store.Get(req, "session")
 	email := fmt.Sprintf("%v", session.Values["user"])
 
-	/*var (
-		payload string
-		publisher string
-		topic string
-	)*/
-
 	data, err := s.db.Query("SELECT m.payload, m.publisher, m.topic FROM messages m, subscriptions s "+
 		"WHERE m.topic = s.topic and s.subscriber = $1", email)
 
 	if err != nil {
 		panic(err)
 	}
-
-	/*for data.Next() {
-		err := data.Scan(&payload, &publisher, &topic)
-		if err != nil {
-			log.Fatal(err)
-		}
-		log.Println(payload, publisher, topic)
-	}*/
 
 	tRes := Message{}
 	var results []Message
@@ -293,12 +279,31 @@ func (s *server) publish(res http.ResponseWriter, req *http.Request) {
 			panic(err)
 		}
 
+		go publishTo(object.Topic, object.Message)
+
 		res.WriteHeader(200)
 
 	}
 
 	//TODO 301
 	//http.Redirect(res, req, "/notifications", 301)
+}
+
+func (s *server) getAllSubscriptions() {
+
+	data, err := s.db.Query("SELECT * FROM subscriptions ORDER BY topic")
+
+	if err != nil {
+		panic(err)
+	}
+
+	for data.Next() {
+		var subscriber, topic string
+		data.Scan(&subscriber, &topic)
+		eb.Subscribe(topic, make(chan DataEvent))
+	}
+
+	return
 }
 
 func main() {
@@ -325,6 +330,21 @@ func main() {
 	fmt.Println("Successfully connected!")
 
 	s := server{db: db}
+	s.getAllSubscriptions()
+
+	listener := func(name string, ch DataChannel) {
+		fmt.Printf("cazzo")
+		for i := range ch {
+			fmt.Printf("[%s] got %s\n", name, i)
+		}
+	}
+
+	for key := range eb.subscribers {
+		//fmt.Println("Key:", key, "Value:", value)
+		for _, item := range eb.subscribers[key] {
+			go listener("boh", item)
+		}
+	}
 
 	fs := http.FileServer(http.Dir("../static"))
 	http.Handle("/static/", http.StripPrefix("/static/", fs))
