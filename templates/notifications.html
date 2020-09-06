@@ -12,8 +12,9 @@
             <thead>
             <tr>
                 <th scope="col">Payload</th>
-                <th scope="col">Publisher</th>
                 <th scope="col">Topic</th>
+                <th scope="col">Latitude</th>
+                <th scope="col">Longitude</th>
             </tr>
             </thead>
             <tbody>
@@ -21,6 +22,8 @@
                 <tr>
                     <td>{{.Message}}</td>
                     <td>{{.Topic}}</td>
+                    <td>{{.Latitude}}</td>
+                    <td>{{.Longitude}}</td>
                 </tr>
             {{end}}
             </tbody>

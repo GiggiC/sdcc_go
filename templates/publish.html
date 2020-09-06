@@ -12,53 +12,77 @@
 
 
             <div class="col-md-12 order-md-1">
-                <form method="POST" action="/publish">
 
-                    <div class="row">
-                        <div class="col-md-6 mb-3">
-                            <label for="message">Message</label>
-                            <input type="text" class="form-control" name="payload" placeholder="Message" value="" required>
-                            <div class="invalid-feedback">
-                                Valid first name is required.
-                            </div>
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label for="message">Message</label>
+                        <input type="text" class="form-control" id="payload" placeholder="Message" value=""
+                               required>
+                        <div class="invalid-feedback">
+                            Valid first name is required.
                         </div>
-
-                        <div class="col-md-6 mb-3">
-                            <label for="country">Topic</label>
-                            <select class="custom-select d-block w-100" name="topic" required>
-                                <option value="Topic 1">Topic 1</option>
-                                <option value="Topic 2">Topic 2</option>
-                                <option value="Topic 3">Topic 3</option>
-                                <option value="Topic 4">Topic 4</option>
-                            </select>
-                            <div class="invalid-feedback">
-                                Please select a valid Topic.
-                            </div>
-                        </div>
-
                     </div>
-                    <hr class="mb-4">
-                    <button class="btn btn-primary btn-lg btn-block" type="submit">Send Message
-                    </button>
-                </form>
+
+                    <div class="col-md-6 mb-3">
+                        <label for="country">Topic</label>
+                        <select class="custom-select d-block w-100" id="topic" required>
+                            <option value="Topic 1">Topic 1</option>
+                            <option value="Topic 2">Topic 2</option>
+                            <option value="Topic 3">Topic 3</option>
+                            <option value="Topic 4">Topic 4</option>
+                        </select>
+                        <div class="invalid-feedback">
+                            Please select a valid Topic.
+                        </div>
+                    </div>
+
+                </div>
+
+                <input type="text" class="form-control" id="latitude" hidden value="">
+                <input type="text" class="form-control" id="longitude" hidden value="">
+
+                <hr class="mb-4">
+                <button class="btn btn-primary btn-lg btn-block" onclick="getLocation()">Send Message
+                </button>
+
             </div>
 
         </div>
     </main>
 
-    {{/*   <script>
+    <script>
+        function getLocation() {
 
-        var socket = new WebSocket("ws://localhost:8080/websocket");
-        //var e = document.getElementById("topic");
-        //var result = e.options[e.selectedIndex].text;
+            // Check whether browser supports Geolocation API or not
+            if (navigator.geolocation) { // Supported
 
+                // To add PositionOptions
 
-        function send() {
-
-            const result = $("#topic :selected").text(); // The text content of the selected option
-            var data = JSON.stringify({"Message": message.value, "Topic": result});
-            socket.send(data);
-            message.value = "";
+                navigator.geolocation.getCurrentPosition(getPosition);
+            } else { // Not supported
+                alert("Oops! This browser does not support HTML Geolocation.");
+            }
         }
-    </script>*/}}
+
+        function getPosition(position) {
+
+            var payload = document.getElementById('payload').value
+            var topic = document.getElementById('topic').value
+            var latitude = position.coords.latitude
+            var longitude = position.coords.longitude
+
+            $.ajax({
+                url: "/publish",
+                data: {payload: payload, topic: topic, latitude: latitude, longitude: longitude}, //If the request needs any data
+                success: function(){
+                    window.location.href = '/publishPage'
+                }
+            }).done(function (data) {
+                // Do whatever with returned data
+            });
+        }
+
+        // To add catchError(positionError) function
+
+    </script>
 {{end}}

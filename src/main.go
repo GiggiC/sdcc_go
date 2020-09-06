@@ -6,20 +6,16 @@ import (
 	"fmt"
 	_ "github.com/gomodule/redigo/redis"
 	_ "github.com/gorilla/sessions"
-	"github.com/gorilla/websocket"
 	_ "github.com/lib/pq"
 	"log"
 	"net/http"
+	"strconv"
 	"sync"
 )
 
 type Object struct {
 	Status string
 	Data   interface{}
-}
-
-type Message struct {
-	Payload, Publisher, Topic string
 }
 
 type Topic struct {
@@ -31,12 +27,6 @@ type server struct {
 	db *sql.DB
 }
 
-type User struct {
-	Firstname string `json:"firstname"`
-	Lastname  string `json:"lastname"`
-	Age       int    `json:"age"`
-}
-
 const (
 	host     = "localhost"
 	port     = 5432
@@ -45,20 +35,13 @@ const (
 	dbname   = "sdcc"
 )
 
-var upgrader = websocket.Upgrader{
-	ReadBufferSize:  1024,
-	WriteBufferSize: 1024,
-}
-
 type DataEvent struct {
-	Message string `json:"message"`
-	Topic   string `json:"topic"`
+	Message   string
+	Topic     string
+	Latitude  float64
+	Longitude float64
 }
 
-// DataChannel is a channel which can accept an DataEvent
-//type DataChannel chan DataEvent
-
-// DataEventSlice is a slice of DataChannels
 type DataEventSlice []DataEvent
 type Subscribers []string
 
@@ -69,22 +52,18 @@ type EventBus struct {
 	rm            sync.RWMutex
 }
 
-func (eb *EventBus) Publish(topic string, message string) {
+func (eb *EventBus) Publish(topic string, message string, latitude string, longitude string) {
 
 	eb.rm.RLock()
-	fmt.Println("publish fuoori")
 
 	if _, found := eb.topicMessages[topic]; found {
-		// this is done because the slice refer to same array even though they are passed by value
-		// thus we are creating a new slice with our elements thus preserve locking correctly.
-		// special thanks for /u/freesid who pointed it out
-		//channels := append(DataEventSlice{}, slice...)
 
 		go func() {
 
-			dataEvent := DataEvent{Message: message, Topic: topic}
+			latitudeFloat, _ := strconv.ParseFloat(latitude, 64)
+			longitudeFloat, _ := strconv.ParseFloat(longitude, 64)
+			dataEvent := DataEvent{Message: message, Topic: topic, Latitude: latitudeFloat, Longitude: longitudeFloat}
 			eb.topicMessages[topic] = append(eb.topicMessages[topic], dataEvent)
-			fmt.Println("publish dentro")
 		}()
 	}
 
@@ -102,9 +81,7 @@ func (eb *EventBus) Subscribe(topic string, email string) {
 
 	} else {
 
-		fmt.Println("subscrt")
 		eb.subscribers[email] = append(eb.subscribers[email], topic)
-
 	}
 
 	eb.rm.Unlock()
@@ -115,15 +92,9 @@ var eb = &EventBus{
 	subscribers:   map[string]Subscribers{},
 }
 
-func printDataEvent(data DataEvent) {
-	fmt.Printf("Topic: %s; DataEvent: %v\n", data.Topic, data.Message)
-}
+func publishTo(topic string, data string, latitude string, longitude string) {
 
-func publishTo(topic string, data string) {
-	//for {
-	eb.Publish(topic, data)
-	//time.Sleep(time.Duration(rand.Intn(1000)) * time.Millisecond)
-	//}
+	eb.Publish(topic, data, latitude, longitude)
 }
 
 func Find(slice []string, val string) bool {
@@ -159,8 +130,6 @@ func (s *server) notifications(res http.ResponseWriter, req *http.Request) {
 
 	var notifications []DataEvent
 
-	//fmt.Println("Key:", key, "Value:", value)
-
 	for _, item := range eb.subscribers[email] {
 
 		for _, message := range eb.topicMessages[item] {
@@ -169,26 +138,6 @@ func (s *server) notifications(res http.ResponseWriter, req *http.Request) {
 		}
 
 	}
-
-	/*data, err := s.db.Query("SELECT m.payload, m.publisher, m.topic FROM messages m, subscriptions s "+
-	  	"WHERE m.topic = s.topic and s.subscriber = $1", email)
-
-	  if err != nil {
-
-	  	panic(err)
-	  }
-
-	  tRes := Message{}
-	  var results []Message
-
-	  for data.Next() {
-	  	var payload, publisher, topic string
-	  	data.Scan(&payload, &publisher, &topic)
-	  	tRes.Payload = payload
-	  	tRes.Publisher = publisher
-	  	tRes.Topic = topic
-	  	results = append(results, tRes)
-	  }*/
 
 	redirecter(res, req, "notifications.html", notifications)
 }
@@ -247,8 +196,6 @@ func (s *server) subscribe(res http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	// Query()["key"] will return an array of items,
-	// we only want the single item.
 	topic := topics[0]
 
 	sqlStatement := `
@@ -275,8 +222,6 @@ func (s *server) unsubscribe(res http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	// Query()["key"] will return an array of items,
-	// we only want the single item.
 	topic := topics[0]
 
 	sqlStatement := `
@@ -298,14 +243,20 @@ func publishPage(res http.ResponseWriter, req *http.Request) {
 
 func (s *server) publish(res http.ResponseWriter, req *http.Request) {
 
-	fmt.Print("eeeeee")
-	session, _ := store.Get(req, "session")
-	publisher := fmt.Sprintf("%v", session.Values["user"])
+	//session, _ := store.Get(req, "session")
+	//publisher := fmt.Sprintf("%v", session.Values["user"])
 
-	payload := req.FormValue("payload")
-	topic := req.FormValue("topic")
+	payloads, _ := req.URL.Query()["payload"]
+	topics, _ := req.URL.Query()["topic"]
+	latitudes, _ := req.URL.Query()["latitude"]
+	longitudes, _ := req.URL.Query()["longitude"]
 
-	sqlStatement := `
+	payload := payloads[0]
+	topic := topics[0]
+	latitude := latitudes[0]
+	longitude := longitudes[0]
+
+	/*sqlStatement := `
 			INSERT INTO messages (payload, publisher,topic)
 			VALUES ($1, $2, $3)`
 
@@ -313,9 +264,9 @@ func (s *server) publish(res http.ResponseWriter, req *http.Request) {
 
 	if err != nil {
 		panic(err)
-	}
+	}*/
 
-	go publishTo(topic, payload)
+	go publishTo(topic, payload, latitude, longitude)
 
 	//res.WriteHeader(301)
 
@@ -340,29 +291,10 @@ func (s *server) getAllSubscriptions() {
 	return
 }
 
-/*func listener() {
+func (s *server) geo(res http.ResponseWriter, req *http.Request) {
 
-	for key := range eb.subscribers {
-		//fmt.Println("Key:", key, "Value:", value)
-
-		key := key
-		go func() {
-			for {
-
-				for _, item := range eb.subscribers[key] {
-
-					d := <-item
-					d2 := <-item
-					go fmt.Print("Primo " + d.Topic)
-					go fmt.Print("Secondo " + d2.Topic)
-
-				}
-
-			}
-		}()
-
-	}
-}*/
+	redirecter(res, req, "geo.html", nil)
+}
 
 func main() {
 
