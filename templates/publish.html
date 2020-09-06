@@ -10,39 +10,43 @@
 
         <div class="row">
 
+
             <div class="col-md-12 order-md-1">
-                <div class="row">
-                    <div class="col-md-6 mb-3">
-                        <label for="message">Message</label>
-                        <input type="text" class="form-control" id="message" placeholder="" value="" required>
-                        <div class="invalid-feedback">
-                            Valid first name is required.
-                        </div>
-                    </div>
+                <form method="POST" action="/publish">
 
-                    <div class="col-md-6 mb-3">
-                        <label for="country">Topic</label>
-                        <select class="custom-select d-block w-100" id="topic" required>
-                            <option value="">Choose...</option>
-                            <option value="Topic 1">Topic 1</option>
-                            <option value="Topic 2">Topic 2</option>
-                            <option value="Topic 3">Topic 3</option>
-                            <option value="Topic 4">Topic 4</option>
-                        </select>
-                        <div class="invalid-feedback">
-                            Please select a valid Topic.
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="message">Message</label>
+                            <input type="text" class="form-control" name="payload" placeholder="Message" value="" required>
+                            <div class="invalid-feedback">
+                                Valid first name is required.
+                            </div>
                         </div>
-                    </div>
 
-                </div>
-                <hr class="mb-4">
-                <button class="btn btn-primary btn-lg btn-block" onclick="send()">Send Message
-                </button>
+                        <div class="col-md-6 mb-3">
+                            <label for="country">Topic</label>
+                            <select class="custom-select d-block w-100" name="topic" required>
+                                <option value="Topic 1">Topic 1</option>
+                                <option value="Topic 2">Topic 2</option>
+                                <option value="Topic 3">Topic 3</option>
+                                <option value="Topic 4">Topic 4</option>
+                            </select>
+                            <div class="invalid-feedback">
+                                Please select a valid Topic.
+                            </div>
+                        </div>
+
+                    </div>
+                    <hr class="mb-4">
+                    <button class="btn btn-primary btn-lg btn-block" type="submit">Send Message
+                    </button>
+                </form>
             </div>
+
         </div>
     </main>
 
-    <script>
+    {{/*   <script>
 
         var socket = new WebSocket("ws://localhost:8080/websocket");
         //var e = document.getElementById("topic");
@@ -52,13 +56,9 @@
         function send() {
 
             const result = $("#topic :selected").text(); // The text content of the selected option
-
-            console.log(result);
-
             var data = JSON.stringify({"Message": message.value, "Topic": result});
-
             socket.send(data);
             message.value = "";
         }
-    </script>
+    </script>*/}}
 {{end}}
