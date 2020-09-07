@@ -2,12 +2,14 @@
 package main
 
 import (
-	"database/sql"
+	"encoding/json"
+	_ "encoding/json"
 	"fmt"
 	_ "github.com/gomodule/redigo/redis"
 	_ "github.com/gorilla/sessions"
 	_ "github.com/lib/pq"
 	"log"
+	"math"
 	"net/http"
 	"strconv"
 	"sync"
@@ -23,36 +25,24 @@ type Topic struct {
 	Flag bool
 }
 
-type server struct {
-	db *sql.DB
-}
-
-const (
-	host     = "localhost"
-	port     = 5432
-	user     = "postgres"
-	password = "password"
-	dbname   = "sdcc"
-)
-
 type DataEvent struct {
-	Message   string
-	Topic     string
-	Latitude  float64
-	Longitude float64
+	Message   string  `json:"Message"`
+	Topic     string  `json:"Topic"`
+	Latitude  float64 `json:"Latitude"`
+	Longitude float64 `json:"Longitude"`
+	Radius    int     `json:"Radius"`
 }
 
 type DataEventSlice []DataEvent
 type Subscribers []string
 
-// EventBus stores the information about subscribers interested for a particular topic
 type EventBus struct {
 	topicMessages map[string]DataEventSlice
 	subscribers   map[string]Subscribers
 	rm            sync.RWMutex
 }
 
-func (eb *EventBus) Publish(topic string, message string, latitude string, longitude string) {
+func (eb *EventBus) Publish(topic string, message string, radius int, latitude string, longitude string) {
 
 	eb.rm.RLock()
 
@@ -62,7 +52,7 @@ func (eb *EventBus) Publish(topic string, message string, latitude string, longi
 
 			latitudeFloat, _ := strconv.ParseFloat(latitude, 64)
 			longitudeFloat, _ := strconv.ParseFloat(longitude, 64)
-			dataEvent := DataEvent{Message: message, Topic: topic, Latitude: latitudeFloat, Longitude: longitudeFloat}
+			dataEvent := DataEvent{Message: message, Topic: topic, Radius: radius, Latitude: latitudeFloat, Longitude: longitudeFloat}
 			eb.topicMessages[topic] = append(eb.topicMessages[topic], dataEvent)
 		}()
 	}
@@ -92,9 +82,9 @@ var eb = &EventBus{
 	subscribers:   map[string]Subscribers{},
 }
 
-func publishTo(topic string, data string, latitude string, longitude string) {
+func publishTo(topic string, data string, radius int, latitude string, longitude string) {
 
-	eb.Publish(topic, data, latitude, longitude)
+	eb.Publish(topic, data, radius, latitude, longitude)
 }
 
 func Find(slice []string, val string) bool {
@@ -106,9 +96,32 @@ func Find(slice []string, val string) bool {
 	return false
 }
 
+func checkDistance(x1 float64, x2 float64, y1 float64, y2 float64, r1 int, r2 int) bool {
+
+	distance := math.Sqrt(math.Pow(x1-x2, 2) - math.Pow(y1-y2, 2))
+
+	if distance > float64(r1+r2) {
+
+		return false
+	}
+
+	return true
+}
+
+func notificationsPage(res http.ResponseWriter, req *http.Request) {
+
+	redirecter(res, req, "notifications.html", nil)
+}
+
 func (s *server) notifications(res http.ResponseWriter, req *http.Request) {
 
 	checkSession(res, req)
+
+	latitudes, _ := req.URL.Query()["latitude"]
+	longitudes, _ := req.URL.Query()["longitude"]
+
+	sessionLatitude, _ := strconv.ParseFloat(latitudes[0], 64)
+	sessionLongitude, _ := strconv.ParseFloat(longitudes[0], 64)
 
 	session, _ := store.Get(req, "session")
 	email := fmt.Sprintf("%v", session.Values["user"])
@@ -134,12 +147,25 @@ func (s *server) notifications(res http.ResponseWriter, req *http.Request) {
 
 		for _, message := range eb.topicMessages[item] {
 
-			notifications = append(notifications, message)
-		}
+			if checkDistance(sessionLatitude, message.Latitude, sessionLongitude, message.Longitude, 5, message.Radius) {
 
+				notifications = append(notifications, message)
+			}
+		}
 	}
 
-	redirecter(res, req, "notifications.html", notifications)
+	b, _ := json.Marshal(notifications)
+
+	fmt.Println(b)
+	res.Header().Set("Content-Type", "application/json")
+
+	_, err = res.Write(b)
+
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	//redirecter(res, req, "notifications.html", notifications)
 }
 
 func (s *server) subscriptionPage(res http.ResponseWriter, req *http.Request) {
@@ -243,16 +269,15 @@ func publishPage(res http.ResponseWriter, req *http.Request) {
 
 func (s *server) publish(res http.ResponseWriter, req *http.Request) {
 
-	//session, _ := store.Get(req, "session")
-	//publisher := fmt.Sprintf("%v", session.Values["user"])
-
 	payloads, _ := req.URL.Query()["payload"]
 	topics, _ := req.URL.Query()["topic"]
+	radiuses, _ := req.URL.Query()["radius"]
 	latitudes, _ := req.URL.Query()["latitude"]
 	longitudes, _ := req.URL.Query()["longitude"]
 
 	payload := payloads[0]
 	topic := topics[0]
+	radius, _ := strconv.Atoi(radiuses[0])
 	latitude := latitudes[0]
 	longitude := longitudes[0]
 
@@ -266,15 +291,13 @@ func (s *server) publish(res http.ResponseWriter, req *http.Request) {
 		panic(err)
 	}*/
 
-	go publishTo(topic, payload, latitude, longitude)
-
-	//res.WriteHeader(301)
+	go publishTo(topic, payload, radius, latitude, longitude)
 
 	//TODO 301
 	http.Redirect(res, req, "/publishPage", 301)
 }
 
-func (s *server) getAllSubscriptions() {
+func (s *server) initEB() {
 
 	data, err := s.db.Query("SELECT * FROM subscriptions ORDER BY topic")
 
@@ -285,49 +308,19 @@ func (s *server) getAllSubscriptions() {
 	for data.Next() {
 		var subscriber, topic string
 		data.Scan(&subscriber, &topic)
+		eb.topicMessages[topic] = DataEventSlice{}
 		eb.Subscribe(topic, subscriber)
 	}
 
 	return
 }
 
-func (s *server) geo(res http.ResponseWriter, req *http.Request) {
-
-	redirecter(res, req, "geo.html", nil)
-}
-
 func main() {
 
 	initSession()
-
-	eb.topicMessages["Topic 1"] = DataEventSlice{}
-	eb.topicMessages["Topic 2"] = DataEventSlice{}
-	eb.topicMessages["Topic 3"] = DataEventSlice{}
-	eb.topicMessages["Topic 4"] = DataEventSlice{}
-
-	psqlInfo := fmt.Sprintf("host=%s port=%d user=%s "+
-		"password=%s dbname=%s sslmode=disable",
-		host, port, user, password, dbname)
-	db, err := sql.Open("postgres", psqlInfo)
-
-	if err != nil {
-		panic(err)
-	}
-
+	s, db := initDB()
 	defer db.Close()
-
-	err = db.Ping()
-
-	if err != nil {
-		panic(err)
-	}
-
-	fmt.Println("Successfully connected!")
-
-	s := server{db: db}
-	s.getAllSubscriptions()
-
-	//go listener()
+	s.initEB()
 
 	fs := http.FileServer(http.Dir("../static"))
 	http.Handle("/static/", http.StripPrefix("/static/", fs))
@@ -338,6 +331,7 @@ func main() {
 	http.HandleFunc("/registrationError", registrationError)
 	http.HandleFunc("/login", s.login)
 	http.HandleFunc("/logout", logout)
+	http.HandleFunc("/notificationsPage", notificationsPage)
 	http.HandleFunc("/notifications", s.notifications)
 	http.HandleFunc("/publishPage", publishPage)
 	http.HandleFunc("/subscriptionPage", s.subscriptionPage)
@@ -346,8 +340,10 @@ func main() {
 	http.HandleFunc("/publish", s.publish)
 
 	log.Println("Listening on :8080...")
-	err = http.ListenAndServe(":8080", nil)
+	err := http.ListenAndServe(":8080", nil)
+
 	if err != nil {
+
 		log.Fatal(err)
 	}
 
