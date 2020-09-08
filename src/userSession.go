@@ -133,7 +133,7 @@ func (s *server) login(res http.ResponseWriter, req *http.Request) {
 	session.Save(req, res)
 
 	//TODO 301
-	http.Redirect(res, req, "/notifications", 301)
+	http.Redirect(res, req, "/notificationsPage", 301)
 }
 
 func logout(res http.ResponseWriter, req *http.Request) {

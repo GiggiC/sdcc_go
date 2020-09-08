@@ -8,8 +8,9 @@ import (
 	_ "github.com/gomodule/redigo/redis"
 	_ "github.com/gorilla/sessions"
 	_ "github.com/lib/pq"
+	"github.com/umahmood/haversine"
+	_ "github.com/umahmood/haversine"
 	"log"
-	"math"
 	"net/http"
 	"strconv"
 	"sync"
@@ -28,39 +29,22 @@ type Topic struct {
 type DataEvent struct {
 	Message   string  `json:"Message"`
 	Topic     string  `json:"Topic"`
+	Radius    int     `json:"Radius"`
+	LifeTime  int     `json:"LifeTime"`
 	Latitude  float64 `json:"Latitude"`
 	Longitude float64 `json:"Longitude"`
-	Radius    int     `json:"Radius"`
 }
 
 type DataEventSlice []DataEvent
 type Subscribers []string
 
 type EventBus struct {
-	topicMessages map[string]DataEventSlice
-	subscribers   map[string]Subscribers
+	topicMessages map[string]DataEventSlice //key: topic - value: messages
+	subscribers   map[string]Subscribers    //key: topic - value: users
 	rm            sync.RWMutex
 }
 
-func (eb *EventBus) Publish(topic string, message string, radius int, latitude string, longitude string) {
-
-	eb.rm.RLock()
-
-	if _, found := eb.topicMessages[topic]; found {
-
-		go func() {
-
-			latitudeFloat, _ := strconv.ParseFloat(latitude, 64)
-			longitudeFloat, _ := strconv.ParseFloat(longitude, 64)
-			dataEvent := DataEvent{Message: message, Topic: topic, Radius: radius, Latitude: latitudeFloat, Longitude: longitudeFloat}
-			eb.topicMessages[topic] = append(eb.topicMessages[topic], dataEvent)
-		}()
-	}
-
-	eb.rm.RUnlock()
-}
-
-func (eb *EventBus) Subscribe(topic string, email string) {
+func (eb *EventBus) topicSubscription(topic string, email string) {
 
 	eb.rm.Lock()
 
@@ -77,14 +61,35 @@ func (eb *EventBus) Subscribe(topic string, email string) {
 	eb.rm.Unlock()
 }
 
+func (eb *EventBus) topicUnsubscription(email string) {
+
+	eb.rm.Lock()
+	delete(eb.subscribers, email)
+	eb.rm.Unlock()
+}
+
 var eb = &EventBus{
 	topicMessages: map[string]DataEventSlice{},
 	subscribers:   map[string]Subscribers{},
 }
 
-func publishTo(topic string, data string, radius int, latitude string, longitude string) {
+func (eb *EventBus) publishTo(topic string, message string, radius int, lifeTime int, latitude string, longitude string) {
 
-	eb.Publish(topic, data, radius, latitude, longitude)
+	eb.rm.RLock()
+
+	if _, found := eb.topicMessages[topic]; found {
+
+		go func() {
+
+			latitudeFloat, _ := strconv.ParseFloat(latitude, 64)
+			longitudeFloat, _ := strconv.ParseFloat(longitude, 64)
+			dataEvent := DataEvent{Message: message, Topic: topic, Radius: radius, LifeTime: lifeTime,
+				Latitude: latitudeFloat, Longitude: longitudeFloat}
+			eb.topicMessages[topic] = append(eb.topicMessages[topic], dataEvent)
+		}()
+	}
+
+	eb.rm.RUnlock()
 }
 
 func Find(slice []string, val string) bool {
@@ -98,9 +103,11 @@ func Find(slice []string, val string) bool {
 
 func checkDistance(x1 float64, x2 float64, y1 float64, y2 float64, r1 int, r2 int) bool {
 
-	distance := math.Sqrt(math.Pow(x1-x2, 2) - math.Pow(y1-y2, 2))
+	sessionLocation := haversine.Coord{Lat: x1, Lon: y1}   // Oxford, UK
+	publisherLocation := haversine.Coord{Lat: x2, Lon: y2} // Turin, Italy
+	_, km := haversine.Distance(sessionLocation, publisherLocation)
 
-	if distance > float64(r1+r2) {
+	if km > float64(r1+r2) {
 
 		return false
 	}
@@ -154,18 +161,15 @@ func (s *server) notifications(res http.ResponseWriter, req *http.Request) {
 		}
 	}
 
-	b, _ := json.Marshal(notifications)
+	result, _ := json.Marshal(notifications)
 
-	fmt.Println(b)
 	res.Header().Set("Content-Type", "application/json")
 
-	_, err = res.Write(b)
+	_, err = res.Write(result)
 
 	if err != nil {
 		fmt.Println(err)
 	}
-
-	//redirecter(res, req, "notifications.html", notifications)
 }
 
 func (s *server) subscriptionPage(res http.ResponseWriter, req *http.Request) {
@@ -224,8 +228,7 @@ func (s *server) subscribe(res http.ResponseWriter, req *http.Request) {
 
 	topic := topics[0]
 
-	sqlStatement := `
-			INSERT INTO subscriptions (subscriber, topic)
+	sqlStatement := `INSERT INTO subscriptions (subscriber, topic)
 			VALUES ($1, $2)`
 
 	_, err := s.db.Exec(sqlStatement, subscriber, topic)
@@ -233,6 +236,8 @@ func (s *server) subscribe(res http.ResponseWriter, req *http.Request) {
 	if err != nil {
 		panic(err)
 	}
+
+	eb.topicSubscription(topic, subscriber)
 
 	http.Redirect(res, req, "/subscriptionPage", 301)
 }
@@ -250,14 +255,15 @@ func (s *server) unsubscribe(res http.ResponseWriter, req *http.Request) {
 
 	topic := topics[0]
 
-	sqlStatement := `
-			DELETE FROM subscriptions WHERE subscriber = $1 AND topic = $2`
+	sqlStatement := `DELETE FROM subscriptions WHERE subscriber = $1 AND topic = $2`
 
 	_, err := s.db.Exec(sqlStatement, subscriber, topic)
 
 	if err != nil {
 		panic(err)
 	}
+
+	eb.topicUnsubscription(subscriber)
 
 	http.Redirect(res, req, "/subscriptionPage", 301)
 }
@@ -271,13 +277,15 @@ func (s *server) publish(res http.ResponseWriter, req *http.Request) {
 
 	payloads, _ := req.URL.Query()["payload"]
 	topics, _ := req.URL.Query()["topic"]
-	radiuses, _ := req.URL.Query()["radius"]
+	radiuss, _ := req.URL.Query()["radius"]
+	lifeTimes, _ := req.URL.Query()["lifeTime"]
 	latitudes, _ := req.URL.Query()["latitude"]
 	longitudes, _ := req.URL.Query()["longitude"]
 
 	payload := payloads[0]
 	topic := topics[0]
-	radius, _ := strconv.Atoi(radiuses[0])
+	radius, _ := strconv.Atoi(radiuss[0])
+	lifeTime, _ := strconv.Atoi(lifeTimes[0])
 	latitude := latitudes[0]
 	longitude := longitudes[0]
 
@@ -291,7 +299,7 @@ func (s *server) publish(res http.ResponseWriter, req *http.Request) {
 		panic(err)
 	}*/
 
-	go publishTo(topic, payload, radius, latitude, longitude)
+	go eb.publishTo(topic, payload, radius, lifeTime, latitude, longitude)
 
 	//TODO 301
 	http.Redirect(res, req, "/publishPage", 301)
@@ -309,7 +317,7 @@ func (s *server) initEB() {
 		var subscriber, topic string
 		data.Scan(&subscriber, &topic)
 		eb.topicMessages[topic] = DataEventSlice{}
-		eb.Subscribe(topic, subscriber)
+		eb.topicSubscription(topic, subscriber)
 	}
 
 	return

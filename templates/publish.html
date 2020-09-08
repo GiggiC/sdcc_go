@@ -14,7 +14,7 @@
             <div class="col-md-12 order-md-1">
 
                 <div class="row">
-                    <div class="col-md-4 mb-3">
+                    <div class="col-md-6 mb-3">
                         <label for="message">Message</label>
                         <input type="text" class="form-control" id="payload" placeholder="Message" value=""
                                required>
@@ -23,16 +23,7 @@
                         </div>
                     </div>
 
-                    <div class="col-md-4 mb-3">
-                        <label for="radius">Radius</label>
-                        <input type="number" class="form-control" id="radius" placeholder="Radius" value=""
-                               required>
-                        <div class="invalid-feedback">
-                            Valid radius is required.
-                        </div>
-                    </div>
-
-                    <div class="col-md-4 mb-3">
+                    <div class="col-md-6 mb-3">
                         <label for="country">Topic</label>
                         <select class="custom-select d-block w-100" id="topic" required>
                             <option value="Topic 1">Topic 1</option>
@@ -42,6 +33,27 @@
                         </select>
                         <div class="invalid-feedback">
                             Please select a valid Topic.
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row">
+
+                    <div class="col-md-6 mb-3">
+                        <label for="radius">Radius</label>
+                        <input type="number" class="form-control" id="radius" placeholder="Radius" value=""
+                               required>
+                        <div class="invalid-feedback">
+                            Valid radius is required.
+                        </div>
+                    </div>
+
+                    <div class="col-md-6 mb-3">
+                        <label for="lifeTime">Life Time</label>
+                        <input type="number" class="form-control" id="radius" placeholder="Life Time" value=""
+                               required>
+                        <div class="invalid-feedback">
+                            Valid Life Time is required.
                         </div>
                     </div>
 
@@ -78,13 +90,15 @@
             const payload = document.getElementById('payload').value;
             const topic = document.getElementById('topic').value;
             const radius = document.getElementById('radius').value;
+            const lifeTime = document.getElementById('lifeTime').value;
             const latitude = position.coords.latitude;
             const longitude = position.coords.longitude;
 
             $.ajax({
                 url: "/publish",
-                data: {payload: payload, topic: topic, radius: radius, latitude: latitude, longitude: longitude}, //If the request needs any data
-                success: function(){
+                data: {payload: payload, topic: topic, radius: radius, lifeTime: lifeTime,
+                    latitude: latitude, longitude: longitude}, //If the request needs any data
+                success: function () {
                     window.location.href = '/publishPage'
                 }
             }).done(function (data) {
