@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"strconv"
 	"sync"
+	"time"
 )
 
 type Object struct {
@@ -27,12 +28,12 @@ type Topic struct {
 }
 
 type DataEvent struct {
-	Message   string  `json:"Message"`
-	Topic     string  `json:"Topic"`
-	Radius    int     `json:"Radius"`
-	LifeTime  int     `json:"LifeTime"`
-	Latitude  float64 `json:"Latitude"`
-	Longitude float64 `json:"Longitude"`
+	Message   string    `json:"Message"`
+	Topic     string    `json:"Topic"`
+	Radius    int       `json:"Radius"`
+	LifeTime  time.Time `json:"LifeTime"`
+	Latitude  float64   `json:"Latitude"`
+	Longitude float64   `json:"Longitude"`
 }
 
 type DataEventSlice []DataEvent
@@ -75,6 +76,8 @@ var eb = &EventBus{
 
 func (eb *EventBus) publishTo(topic string, message string, radius int, lifeTime int, latitude string, longitude string) {
 
+	expirationTime := time.Now().Local().Add(time.Minute * time.Duration(lifeTime))
+
 	eb.rm.RLock()
 
 	if _, found := eb.topicMessages[topic]; found {
@@ -83,13 +86,41 @@ func (eb *EventBus) publishTo(topic string, message string, radius int, lifeTime
 
 			latitudeFloat, _ := strconv.ParseFloat(latitude, 64)
 			longitudeFloat, _ := strconv.ParseFloat(longitude, 64)
-			dataEvent := DataEvent{Message: message, Topic: topic, Radius: radius, LifeTime: lifeTime,
+			dataEvent := DataEvent{Message: message, Topic: topic, Radius: radius, LifeTime: expirationTime,
 				Latitude: latitudeFloat, Longitude: longitudeFloat}
 			eb.topicMessages[topic] = append(eb.topicMessages[topic], dataEvent)
 		}()
 	}
 
 	eb.rm.RUnlock()
+}
+
+func (eb *EventBus) deleteMessage(topic string) {
+
+	for i := 0; i < len(eb.topicMessages[topic]); {
+
+		if time.Now().After(eb.topicMessages[topic][i].LifeTime) {
+
+			eb.topicMessages[topic][i] = eb.topicMessages[topic][len(eb.topicMessages[topic])-1]
+			eb.topicMessages[topic] = eb.topicMessages[topic][:len(eb.topicMessages[topic])-1]
+		} else {
+			i++
+		}
+	}
+}
+
+func (eb *EventBus) garbageCollection() {
+
+	for {
+
+		fmt.Println("Dentro")
+		for topic := range eb.topicMessages {
+
+			go eb.deleteMessage(topic)
+		}
+
+		time.Sleep(time.Minute * time.Duration(1))
+	}
 }
 
 func Find(slice []string, val string) bool {
@@ -329,6 +360,7 @@ func main() {
 	s, db := initDB()
 	defer db.Close()
 	s.initEB()
+	go eb.garbageCollection()
 
 	fs := http.FileServer(http.Dir("../static"))
 	http.Handle("/static/", http.StripPrefix("/static/", fs))
