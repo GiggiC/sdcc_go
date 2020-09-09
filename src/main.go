@@ -74,25 +74,45 @@ var eb = &EventBus{
 	subscribers:   map[string]Subscribers{},
 }
 
-func (eb *EventBus) publishTo(topic string, message string, radius int, lifeTime int, latitude string, longitude string) {
+func (eb *EventBus) publishTo(topic string, message string, radius int, lifeTime int, latitude string, longitude string) bool {
 
+	startTime := time.Now().Nanosecond()
 	expirationTime := time.Now().Local().Add(time.Minute * time.Duration(lifeTime))
 
 	eb.rm.RLock()
 
-	if _, found := eb.topicMessages[topic]; found {
+	//if _, found := eb.topicMessages[topic]; found {
 
-		go func() {
+	checked := false
 
-			latitudeFloat, _ := strconv.ParseFloat(latitude, 64)
-			longitudeFloat, _ := strconv.ParseFloat(longitude, 64)
-			dataEvent := DataEvent{Message: message, Topic: topic, Radius: radius, LifeTime: expirationTime,
-				Latitude: latitudeFloat, Longitude: longitudeFloat}
-			eb.topicMessages[topic] = append(eb.topicMessages[topic], dataEvent)
-		}()
+	for i := 0; i < 5; i++ {
+
+		latitudeFloat, _ := strconv.ParseFloat(latitude, 64)
+		longitudeFloat, _ := strconv.ParseFloat(longitude, 64)
+		dataEvent := DataEvent{Message: message, Topic: topic, Radius: radius, LifeTime: expirationTime,
+			Latitude: latitudeFloat, Longitude: longitudeFloat}
+
+		size := len(eb.topicMessages[topic])
+		eb.topicMessages[topic] = append(eb.topicMessages[topic], dataEvent)
+		size1 := len(eb.topicMessages[topic])
+
+		if size1 > size {
+
+			checked = true
+		}
+
+		endTime := time.Now().Nanosecond()
+
+		if (endTime-startTime) < 100000000 && checked {
+
+			break
+		}
 	}
+	//}
 
 	eb.rm.RUnlock()
+
+	return true
 }
 
 func (eb *EventBus) deleteMessage(topic string) {
@@ -113,7 +133,6 @@ func (eb *EventBus) garbageCollection() {
 
 	for {
 
-		fmt.Println("Dentro")
 		for topic := range eb.topicMessages {
 
 			go eb.deleteMessage(topic)
@@ -153,6 +172,8 @@ func notificationsPage(res http.ResponseWriter, req *http.Request) {
 
 func (s *server) notifications(res http.ResponseWriter, req *http.Request) {
 
+	startTime := time.Now().Nanosecond()
+
 	checkSession(res, req)
 
 	latitudes, _ := req.URL.Query()["latitude"]
@@ -181,14 +202,24 @@ func (s *server) notifications(res http.ResponseWriter, req *http.Request) {
 
 	var notifications []DataEvent
 
-	for _, item := range eb.subscribers[email] {
+	for i := 0; i < 5; i++ {
 
-		for _, message := range eb.topicMessages[item] {
+		for _, item := range eb.subscribers[email] {
 
-			if checkDistance(sessionLatitude, message.Latitude, sessionLongitude, message.Longitude, 5, message.Radius) {
+			for _, message := range eb.topicMessages[item] {
 
-				notifications = append(notifications, message)
+				if checkDistance(sessionLatitude, message.Latitude, sessionLongitude, message.Longitude, 5, message.Radius) {
+
+					notifications = append(notifications, message)
+				}
 			}
+		}
+
+		endTime := time.Now().Nanosecond()
+
+		if (endTime - startTime) < 100000000 {
+
+			break
 		}
 	}
 
