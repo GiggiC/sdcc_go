@@ -81,8 +81,6 @@ func (eb *EventBus) publishTo(topic string, message string, radius int, lifeTime
 
 	eb.rm.RLock()
 
-	//if _, found := eb.topicMessages[topic]; found {
-
 	checked := false
 
 	for i := 0; i < 5; i++ {
@@ -108,7 +106,6 @@ func (eb *EventBus) publishTo(topic string, message string, radius int, lifeTime
 			break
 		}
 	}
-	//}
 
 	eb.rm.RUnlock()
 
@@ -142,19 +139,10 @@ func (eb *EventBus) garbageCollection() {
 	}
 }
 
-func Find(slice []string, val string) bool {
-	for _, item := range slice {
-		if item == val {
-			return true
-		}
-	}
-	return false
-}
-
 func checkDistance(x1 float64, x2 float64, y1 float64, y2 float64, r1 int, r2 int) bool {
 
-	sessionLocation := haversine.Coord{Lat: x1, Lon: y1}   // Oxford, UK
-	publisherLocation := haversine.Coord{Lat: x2, Lon: y2} // Turin, Italy
+	sessionLocation := haversine.Coord{Lat: x1, Lon: y1}
+	publisherLocation := haversine.Coord{Lat: x2, Lon: y2}
 	_, km := haversine.Distance(sessionLocation, publisherLocation)
 
 	if km > float64(r1+r2) {
@@ -167,14 +155,14 @@ func checkDistance(x1 float64, x2 float64, y1 float64, y2 float64, r1 int, r2 in
 
 func notificationsPage(res http.ResponseWriter, req *http.Request) {
 
-	redirecter(res, req, "notifications.html", nil)
+	if checkSession(res, req) {
+		redirecter(res, req, "notifications.html", nil)
+	}
 }
 
 func (s *server) notifications(res http.ResponseWriter, req *http.Request) {
 
 	startTime := time.Now().Nanosecond()
-
-	checkSession(res, req)
 
 	latitudes, _ := req.URL.Query()["latitude"]
 	longitudes, _ := req.URL.Query()["longitude"]
@@ -236,45 +224,47 @@ func (s *server) notifications(res http.ResponseWriter, req *http.Request) {
 
 func (s *server) subscriptionPage(res http.ResponseWriter, req *http.Request) {
 
-	checkSession(res, req)
+	if checkSession(res, req) {
 
-	session, _ := store.Get(req, "session")
-	email := fmt.Sprintf("%v", session.Values["user"])
+		session, _ := store.Get(req, "session")
+		email := fmt.Sprintf("%v", session.Values["user"])
 
-	data, err := s.db.Query("SELECT topic FROM subscriptions"+
-		" WHERE subscriber = $1", email)
+		data, err := s.db.Query("SELECT topic FROM subscriptions"+
+			" WHERE subscriber = $1", email)
 
-	if err != nil {
-		panic(err)
+		if err != nil {
+			panic(err)
+		}
+
+		tRes := Topic{}
+		var results []Topic
+
+		for data.Next() {
+			var name string
+			data.Scan(&name)
+			tRes.Name = name
+			tRes.Flag = true
+			results = append(results, tRes)
+		}
+
+		data, err = s.db.Query("select t.name from topics t where t.name "+
+			"not in (select s.topic from subscriptions s where s.subscriber = $1)", email)
+
+		if err != nil {
+			panic(err)
+		}
+
+		for data.Next() {
+			var name string
+			data.Scan(&name)
+			tRes.Name = name
+			tRes.Flag = false
+			results = append(results, tRes)
+		}
+
+		redirecter(res, req, "subscribe.html", results)
+
 	}
-
-	tRes := Topic{}
-	var results []Topic
-
-	for data.Next() {
-		var name string
-		data.Scan(&name)
-		tRes.Name = name
-		tRes.Flag = true
-		results = append(results, tRes)
-	}
-
-	data, err = s.db.Query("select t.name from topics t where t.name "+
-		"not in (select s.topic from subscriptions s where s.subscriber = $1)", email)
-
-	if err != nil {
-		panic(err)
-	}
-
-	for data.Next() {
-		var name string
-		data.Scan(&name)
-		tRes.Name = name
-		tRes.Flag = false
-		results = append(results, tRes)
-	}
-
-	redirecter(res, req, "subscribe.html", results)
 }
 
 func (s *server) subscribe(res http.ResponseWriter, req *http.Request) {
@@ -290,8 +280,7 @@ func (s *server) subscribe(res http.ResponseWriter, req *http.Request) {
 
 	topic := topics[0]
 
-	sqlStatement := `INSERT INTO subscriptions (subscriber, topic)
-			VALUES ($1, $2)`
+	sqlStatement := `INSERT INTO subscriptions (subscriber, topic) VALUES ($1, $2)`
 
 	_, err := s.db.Exec(sqlStatement, subscriber, topic)
 
@@ -332,7 +321,9 @@ func (s *server) unsubscribe(res http.ResponseWriter, req *http.Request) {
 
 func publishPage(res http.ResponseWriter, req *http.Request) {
 
-	redirecter(res, req, "publish.html", nil)
+	if checkSession(res, req) {
+		redirecter(res, req, "publish.html", nil)
+	}
 }
 
 func (s *server) publish(res http.ResponseWriter, req *http.Request) {

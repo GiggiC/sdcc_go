@@ -16,24 +16,35 @@ var (
 )
 
 func initSession() {
+
 	store = sessions.NewCookieStore(key)
 	store.Options = &sessions.Options{
-		Path:   "/",
-		MaxAge: 10000,
+		Path:   "",
+		MaxAge: 100000,
 	}
 }
 
 func registrationPage(res http.ResponseWriter, req *http.Request) {
 
-	data := Object{
-		Status: "not-logged",
+	session, _ := store.Get(req, "session")
+
+	// Check if user is authenticated
+	if auth, ok := session.Values["authenticated"].(bool); ((!ok || !auth) && session.Values["authenticated"] == nil) || (!ok || !auth) {
+
+		data := Object{
+			Status: "not-logged",
+		}
+
+		lp := filepath.Join("../templates", "layout.html")
+		fp := filepath.Join("../templates", "registration.html")
+
+		tmpl, _ := template.ParseFiles(lp, fp)
+		tmpl.ExecuteTemplate(res, "layout", data)
+
+		return
 	}
 
-	lp := filepath.Join("../templates", "layout.html")
-	fp := filepath.Join("../templates", "registration.html")
-
-	tmpl, _ := template.ParseFiles(lp, fp)
-	tmpl.ExecuteTemplate(res, "layout", data)
+	http.Redirect(res, req, "/notificationsPage", 301)
 }
 
 func (s *server) registration(res http.ResponseWriter, req *http.Request) {
@@ -58,9 +69,7 @@ func (s *server) registration(res http.ResponseWriter, req *http.Request) {
 			return
 		}
 
-		sqlStatement := `
-			INSERT INTO users (email, username, password)
-			VALUES ($1, $2, $3)`
+		sqlStatement := `INSERT INTO users (email, username, password) VALUES ($1, $2, $3)`
 
 		_, err = s.db.Exec(sqlStatement, email, username, hashedPassword)
 
@@ -94,15 +103,25 @@ func registrationError(w http.ResponseWriter, r *http.Request) {
 
 func loginPage(res http.ResponseWriter, req *http.Request) {
 
-	data := Object{
-		Status: "not-logged",
+	session, _ := store.Get(req, "session")
+
+	// Check if user is authenticated
+	if auth, ok := session.Values["authenticated"].(bool); ((!ok || !auth) && session.Values["authenticated"] == nil) || (!ok || !auth) {
+
+		data := Object{
+			Status: "not-logged",
+		}
+
+		lp := filepath.Join("../templates", "layout.html")
+		fp := filepath.Join("../templates", "login.html")
+
+		tmpl, _ := template.ParseFiles(lp, fp)
+		tmpl.ExecuteTemplate(res, "layout", data)
+
+		return
 	}
 
-	lp := filepath.Join("../templates", "layout.html")
-	fp := filepath.Join("../templates", "login.html")
-
-	tmpl, _ := template.ParseFiles(lp, fp)
-	tmpl.ExecuteTemplate(res, "layout", data)
+	http.Redirect(res, req, "/notificationsPage", 301)
 }
 
 func (s *server) login(res http.ResponseWriter, req *http.Request) {
@@ -143,24 +162,29 @@ func logout(res http.ResponseWriter, req *http.Request) {
 	// Revoke users authentication
 	session.Values["authenticated"] = false
 
-	//delete(session.Values, "authenticated")
-	//session.Options.MaxAge = -1
-
 	_ = session.Save(req, res)
 
 	http.Redirect(res, req, "/", 301)
 }
 
-func checkSession(res http.ResponseWriter, req *http.Request) {
+func checkSession(res http.ResponseWriter, req *http.Request) bool {
 
 	session, _ := store.Get(req, "session")
 
 	// Check if user is authenticated
 	if auth, ok := session.Values["authenticated"].(bool); !ok || !auth {
 
-		http.Redirect(res, req, "/", http.StatusForbidden)
-		return
+		http.Redirect(res, req, "/", http.StatusUnauthorized)
+		res.Write([]byte(
+			"<script>" +
+				"alert('Please login');" +
+				"window.location.href='/'" +
+				"</script>"))
+
+		return false
 	}
+
+	return true
 }
 
 func redirecter(res http.ResponseWriter, req *http.Request, url string, results interface{}) {
