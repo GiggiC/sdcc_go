@@ -11,12 +11,20 @@ type server struct {
 
 var s server
 
-const (
+/*const (
 	host     = "localhost"
 	port     = 5432
 	user     = "postgres"
 	password = "password"
 	dbname   = "sdcc"
+)*/
+
+const (
+	host     = "sdcc-db.c6fwapw2bm2k.us-east-1.rds.amazonaws.com"
+	port     = 5432
+	user     = "postgres"
+	password = "ElAmqMhwe82DonytfC1a"
+	dbname   = ""
 )
 
 func initDB() (s *server, database *sql.DB) {

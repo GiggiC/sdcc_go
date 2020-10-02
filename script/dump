@@ -49,7 +49,6 @@ SET default_with_oids = false;
 
 CREATE TABLE public.messages (
     payload text,
-    publisher text,
     topic text,
     id integer NOT NULL
 );
@@ -126,10 +125,7 @@ ALTER TABLE ONLY public.messages ALTER COLUMN id SET DEFAULT nextval('public.mes
 -- Data for Name: messages; Type: TABLE DATA; Schema: public; Owner: postgres
 --
 
-COPY public.messages (payload, publisher, topic, id) FROM stdin;
-ciao	l.corsi@hotmail.it	Topic 2	2
-ciao	l.corsi@hotmail.it	Topic 3	3
-ciao	l.corsi@hotmail.it	Topic 2	4
+COPY public.messages (payload, topic, id) FROM stdin;
 \.
 
 
@@ -138,8 +134,12 @@ ciao	l.corsi@hotmail.it	Topic 2	4
 --
 
 COPY public.subscriptions (subscriber, topic) FROM stdin;
+leonardo_petraglia@hotmail.it	Topic 1
+leonardo_petraglia@hotmail.it	Topic 2
+luigi.corsi@alumni.uniroma2.eu	Topic 4
+luigi.corsi@alumni.uniroma2.eu	Topic 1
+l.corsi@hotmail.it	Topic 4
 l.corsi@hotmail.it	Topic 1
-l.corsi@hotmail.it	Topic 3
 \.
 
 
@@ -161,6 +161,9 @@ Topic 4
 
 COPY public.users (email, password, username) FROM stdin;
 l.corsi@hotmail.it	$2a$10$58Qe.3wC7FKPVgKXY6SQuOpRxWI5e868FG3efH/90rpUywD.VJcd.	giggix
+leonardo_petraglia@hotmail.it	$2a$10$/4L461rTxWWBGcaK6bGwFeuEC5Lg99O7wqjE.V.YrXSS7fl73bMmS	leopetr
+luigi.corsi@alumni.uniroma2.eu	$2a$10$e/QX.i546kZE24sSWEgCTucRX42GqhqJ5hxwh36AMFRY.9v/KJgDu	aa
+	$2a$10$YbVujmqZoBN0BfKmDU3QyuPTTRzSGoGmukSO3rwYJRfPBE3dkXC/y	
 \.
 
 
@@ -168,7 +171,7 @@ l.corsi@hotmail.it	$2a$10$58Qe.3wC7FKPVgKXY6SQuOpRxWI5e868FG3efH/90rpUywD.VJcd.	
 -- Name: messages_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
 --
 
-SELECT pg_catalog.setval('public.messages_id_seq', 18, true);
+SELECT pg_catalog.setval('public.messages_id_seq', 169, true);
 
 
 --
@@ -209,14 +212,6 @@ ALTER TABLE ONLY public.users
 
 ALTER TABLE ONLY public.messages
     ADD CONSTRAINT messages_topics_name_fk FOREIGN KEY (topic) REFERENCES public.topics(name);
-
-
---
--- Name: messages messages_users_email_fk; Type: FK CONSTRAINT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public.messages
-    ADD CONSTRAINT messages_users_email_fk FOREIGN KEY (publisher) REFERENCES public.users(email);
 
 
 --
