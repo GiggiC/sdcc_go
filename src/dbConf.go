@@ -24,7 +24,7 @@ const (
 	port     = 5432
 	user     = "postgres"
 	password = "ElAmqMhwe82DonytfC1a"
-	dbname   = ""
+	dbname   = "postgres"
 )
 
 func initDB() (s *server, database *sql.DB) {
