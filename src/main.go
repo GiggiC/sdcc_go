@@ -3,12 +3,9 @@ package main
 
 import (
 	"encoding/json"
-	_ "encoding/json"
 	"fmt"
-	_ "github.com/gorilla/sessions"
 	_ "github.com/lib/pq"
 	"github.com/umahmood/haversine"
-	_ "github.com/umahmood/haversine"
 	"log"
 	"net/http"
 	"strconv"
