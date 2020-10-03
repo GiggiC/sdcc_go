@@ -151,7 +151,7 @@ func checkDistance(x1 float64, x2 float64, y1 float64, y2 float64, r1 int, r2 in
 
 func notificationsPage(res http.ResponseWriter, req *http.Request) {
 
-	if checkSession(res, req) {
+	if checkSession(res, req) != "" {
 		redirecter(res, req, "notifications.html", nil)
 	}
 }
@@ -166,8 +166,7 @@ func (s *server) notifications(res http.ResponseWriter, req *http.Request) {
 	sessionLatitude, _ := strconv.ParseFloat(latitudes[0], 64)
 	sessionLongitude, _ := strconv.ParseFloat(longitudes[0], 64)
 
-	session, _ := store.Get(req, "session")
-	email := fmt.Sprintf("%v", session.Values["user"])
+	email := checkSession(res, req)
 
 	data, err := s.db.Query("SELECT topic FROM subscriptions "+
 		"WHERE subscriber = $1", email)
@@ -220,10 +219,9 @@ func (s *server) notifications(res http.ResponseWriter, req *http.Request) {
 
 func (s *server) subscriptionPage(res http.ResponseWriter, req *http.Request) {
 
-	if checkSession(res, req) {
+	if checkSession(res, req) != "" {
 
-		session, _ := store.Get(req, "session")
-		email := fmt.Sprintf("%v", session.Values["user"])
+		email := checkSession(res, req)
 
 		data, err := s.db.Query("SELECT topic FROM subscriptions"+
 			" WHERE subscriber = $1", email)
@@ -266,8 +264,7 @@ func (s *server) subscriptionPage(res http.ResponseWriter, req *http.Request) {
 func (s *server) subscribe(res http.ResponseWriter, req *http.Request) {
 
 	topics, ok := req.URL.Query()["topic"]
-	session, _ := store.Get(req, "session")
-	subscriber := fmt.Sprintf("%v", session.Values["user"])
+	subscriber := checkSession(res, req)
 
 	if !ok || len(topics[0]) < 1 {
 		log.Println("Url Param 'session' is missing")
@@ -292,8 +289,7 @@ func (s *server) subscribe(res http.ResponseWriter, req *http.Request) {
 func (s *server) unsubscribe(res http.ResponseWriter, req *http.Request) {
 
 	topics, ok := req.URL.Query()["topic"]
-	session, _ := store.Get(req, "session")
-	subscriber := fmt.Sprintf("%v", session.Values["user"])
+	subscriber := checkSession(res, req)
 
 	if !ok || len(topics[0]) < 1 {
 		log.Println("Url Param 'session' is missing")
@@ -317,7 +313,7 @@ func (s *server) unsubscribe(res http.ResponseWriter, req *http.Request) {
 
 func publishPage(res http.ResponseWriter, req *http.Request) {
 
-	if checkSession(res, req) {
+	if checkSession(res, req) != "" {
 		redirecter(res, req, "publish.html", nil)
 	}
 }
@@ -374,7 +370,6 @@ func (s *server) initEB() {
 
 func main() {
 
-	initSession()
 	s, db := initDB()
 	defer db.Close()
 	s.initEB()
