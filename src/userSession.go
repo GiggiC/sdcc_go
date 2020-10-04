@@ -3,7 +3,6 @@ package main
 import (
 	"database/sql"
 	"github.com/dgrijalva/jwt-go"
-	_ "github.com/dgrijalva/jwt-go"
 	"golang.org/x/crypto/bcrypt"
 	"html/template"
 	"net/http"
@@ -224,15 +223,21 @@ func checkSession(res http.ResponseWriter, req *http.Request) string {
 	tkn, err := jwt.ParseWithClaims(tknStr, claims, func(token *jwt.Token) (interface{}, error) {
 		return jwtKey, nil
 	})
+
 	if err != nil {
+
 		if err == jwt.ErrSignatureInvalid {
+
 			res.WriteHeader(http.StatusUnauthorized)
 			return ""
 		}
+
 		res.WriteHeader(http.StatusBadRequest)
 		return ""
 	}
+
 	if !tkn.Valid {
+
 		res.WriteHeader(http.StatusUnauthorized)
 		return ""
 	}

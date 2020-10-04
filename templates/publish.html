@@ -12,61 +12,62 @@
 
             <div class="col-md-12 order-md-1">
 
-                <div class="row">
-                    <div class="col-md-6 mb-3">
-                        <label for="message">Message</label>
-                        <input type="text" class="form-control" id="payload" placeholder="Message" value=""
-                               required>
-                        <div class="invalid-feedback">
-                            Valid Message is required.
+                <form>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="payload">Message</label>
+                            <input type="text" class="form-control" id="payload" placeholder="Message" value=""
+                                   required>
+                            <div class="invalid-feedback">
+                                Valid Message is required.
+                            </div>
+                        </div>
+
+                        <div class="col-md-6 mb-3">
+                            <label for="topic">Topic</label>
+                            <select class="custom-select d-block w-100" id="topic" required>
+                                <option value="Topic 1">Topic 1</option>
+                                <option value="Topic 2">Topic 2</option>
+                                <option value="Topic 3">Topic 3</option>
+                                <option value="Topic 4">Topic 4</option>
+                            </select>
+                            <div class="invalid-feedback">
+                                Please select a valid Topic.
+                            </div>
                         </div>
                     </div>
 
-                    <div class="col-md-6 mb-3">
-                        <label for="country">Topic</label>
-                        <select class="custom-select d-block w-100" id="topic" required>
-                            <option value="Topic 1">Topic 1</option>
-                            <option value="Topic 2">Topic 2</option>
-                            <option value="Topic 3">Topic 3</option>
-                            <option value="Topic 4">Topic 4</option>
-                        </select>
-                        <div class="invalid-feedback">
-                            Please select a valid Topic.
-                        </div>
-                    </div>
-                </div>
+                    <div class="row">
 
-                <div class="row">
-
-                    <div class="col-md-6 mb-3">
-                        <label for="radius">Radius</label>
-                        <input type="number" class="form-control" id="radius" placeholder="Radius" value=""
-                               required>
-                        <div class="invalid-feedback">
-                            Valid radius is required.
+                        <div class="col-md-6 mb-3">
+                            <label for="radius">Radius</label>
+                            <input type="number" class="form-control" id="radius" placeholder="Radius" value=""
+                                   required>
+                            <div class="invalid-feedback">
+                                Valid radius is required.
+                            </div>
                         </div>
+
+                        <div class="col-md-6 mb-3">
+                            <label for="lifeTime">Life Time</label>
+                            <input type="number" class="form-control" id="lifeTime" placeholder="Life Time" value=""
+                                   required>
+                            <div class="invalid-feedback">
+                                Valid Life Time is required.
+                            </div>
+                        </div>
+
                     </div>
 
-                    <div class="col-md-6 mb-3">
-                        <label for="lifeTime">Life Time</label>
-                        <input type="number" class="form-control" id="lifeTime" placeholder="Life Time" value=""
-                               required>
-                        <div class="invalid-feedback">
-                            Valid Life Time is required.
-                        </div>
-                    </div>
+                    <input type="text" class="form-control" id="latitude" hidden value="">
+                    <input type="text" class="form-control" id="longitude" hidden value="">
 
-                </div>
-
-                <input type="text" class="form-control" id="latitude" hidden value="">
-                <input type="text" class="form-control" id="longitude" hidden value="">
-
-                <hr class="mb-4">
-                <button class="btn btn-primary btn-lg btn-block" onclick="getLocation()" type="submit">Send Message
-                </button>
+                    <hr class="mb-4">
+                    <button class="btn btn-primary btn-lg btn-block" onclick="getLocation()" type="submit">Send Message
+                    </button>
+                </form>
 
             </div>
-
         </div>
     </main>
 
@@ -92,12 +93,15 @@
 
             $.ajax({
                 url: "/publish",
-                data: {payload: payload, topic: topic, radius: radius, lifeTime: lifeTime,
-                    latitude: latitude, longitude: longitude}, //If the request needs any data
+                data: {
+                    payload: payload, topic: topic, radius: radius, lifeTime: lifeTime,
+                    latitude: latitude, longitude: longitude
+                }, //If the request needs any data
                 success: function () {
                     window.location.href = '/publishPage'
                 }
-            })
+            }).done(function (data) {
+            });
         }
     </script>
 {{end}}

@@ -47,18 +47,13 @@
                     $.ajax({
                         url: "/unsubscribe",
                         data: {topic: topic}, //If the request needs any data
-                        success: function(){
-                            window.location.href = '/subscriptionPage'
-                        }
+
                     }).done(function (data) {
                     });
                 } else {
                     $.ajax({
                         url: "/subscribe",
                         data: {topic: topic}, //If the request needs any data
-                        success: function(){
-                            window.location.href = '/subscriptionPage'
-                        }
                     }).done(function (data) {
                     });
                 }

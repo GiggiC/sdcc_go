@@ -116,7 +116,9 @@ func (eb *EventBus) deleteMessage(topic string) {
 
 			eb.topicMessages[topic][i] = eb.topicMessages[topic][len(eb.topicMessages[topic])-1]
 			eb.topicMessages[topic] = eb.topicMessages[topic][:len(eb.topicMessages[topic])-1]
+
 		} else {
+
 			i++
 		}
 	}
