@@ -34,36 +34,36 @@
 
                     success: function (result) {
 
-                        var table = $('#example');
-                        var tblHeader = "<thead><tr>";
-                        var i = 0;
-                        for (var k in result[0]) {
-                            if (i < 2) {
-                                tblHeader += "<th>" + k + "</th>";
-                            }
-                            i += 1;
-                        }
-                        tblHeader += "</tr></thead><tbody>";
-                        $(tblHeader).appendTo(table);
-                        $.each(result, function (index, value) {
-                            var TableRow = "<tr>";
-                            i = 0;
-                            $.each(value, function (key, val) {
+                        if (result != null) {
+
+                            var table = $('#example');
+                            var tblHeader = "<thead><tr>";
+                            var i = 0;
+                            for (var k in result[0]) {
                                 if (i < 2) {
-                                    TableRow += "<td>" + val + "</td>";
+                                    tblHeader += "<th>" + k + "</th>";
                                 }
                                 i += 1;
+                            }
+                            tblHeader += "</tr></thead><tbody>";
+                            $(tblHeader).appendTo(table);
+                            $.each(result, function (index, value) {
+                                var TableRow = "<tr>";
+                                i = 0;
+                                $.each(value, function (key, val) {
+                                    if (i < 2) {
+                                        TableRow += "<td>" + val + "</td>";
+                                    }
+                                    i += 1;
+                                });
+                                TableRow += "</tr></tbody>";
+                                $(table).append(TableRow);
                             });
-                            TableRow += "</tr></tbody>";
-                            $(table).append(TableRow);
-                        });
 
-                        table.DataTable();
+                            table.DataTable();
+                        }
                     }
-
-                }).done(function (data) {
-                    // Do whatever with returned data
-                });
+                })
             }
         </script>
     </main>

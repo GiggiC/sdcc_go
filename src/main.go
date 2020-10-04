@@ -257,7 +257,6 @@ func (s *server) subscriptionPage(res http.ResponseWriter, req *http.Request) {
 		}
 
 		redirecter(res, req, "subscribe.html", results)
-
 	}
 }
 
