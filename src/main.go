@@ -170,8 +170,6 @@ func (s *server) notifications(res http.ResponseWriter, req *http.Request) {
 	sessionLongitude, _ := strconv.ParseFloat(longitudes[0], 64)
 	sessionRadius, _ := strconv.ParseInt(radius[0], 10, 64)
 
-	fmt.Println("stampo il raggio ", sessionRadius)
-
 	email := checkSession(res, req)
 
 	data, err := s.db.Query("SELECT topic FROM subscriptions "+
