@@ -8,10 +8,21 @@
             <h1 class="h2">Notifications</h1>
         </div>
 
+        <div class="slidecontainer">
+            <label for="myRange">Select Radius (Km)</label><br>
+            <input class="slider" type="range" min="1" max="100" value="50" id="myRange"> Max: 100
+            <p>Selected value: <span id="demo"></span></p>
+        </div>
+
+        //TODO javascript table
         <table id="example" class="table table-striped">
         </table>
 
         <script>
+
+            var slider = document.getElementById("myRange");
+            var output = document.getElementById("demo");
+            output.innerHTML = slider.value; // Display the default slider value
 
             $(document).ready(function () {
 
@@ -22,6 +33,16 @@
                 }
             });
 
+            // Update the current slider value (each time you drag the slider handle)
+            slider.onchange = function() {
+                output.innerHTML = this.value;
+                if (navigator.geolocation) { // Supported
+                    navigator.geolocation.getCurrentPosition(getPosition);
+                } else { // Not supported
+                    alert("Oops! This browser does not support HTML Geolocation.");
+                }
+            }
+
             function getPosition(position) {
 
                 const latitude = position.coords.latitude;
@@ -30,13 +51,15 @@
                 $.ajax({
 
                     url: "/notifications",
-                    data: {latitude: latitude, longitude: longitude}, //If the request needs any data
+                    data: {latitude: latitude, longitude: longitude, radius: slider.value}, //If the request needs any data
 
                     success: function (result) {
 
                         if (result != null) {
 
                             var table = $('#example');
+
+                            $(table).empty();
                             var tblHeader = "<thead><tr>";
                             var i = 0;
                             for (var k in result[0]) {

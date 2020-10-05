@@ -164,9 +164,13 @@ func (s *server) notifications(res http.ResponseWriter, req *http.Request) {
 
 	latitudes, _ := req.URL.Query()["latitude"]
 	longitudes, _ := req.URL.Query()["longitude"]
+	radius, _ := req.URL.Query()["radius"]
 
 	sessionLatitude, _ := strconv.ParseFloat(latitudes[0], 64)
 	sessionLongitude, _ := strconv.ParseFloat(longitudes[0], 64)
+	sessionRadius, _ := strconv.ParseInt(radius[0], 10, 64)
+
+	fmt.Println("stampo il raggio ", sessionRadius)
 
 	email := checkSession(res, req)
 
@@ -193,7 +197,7 @@ func (s *server) notifications(res http.ResponseWriter, req *http.Request) {
 
 			for _, message := range eb.topicMessages[item] {
 
-				if checkDistance(sessionLatitude, message.Latitude, sessionLongitude, message.Longitude, 5, message.Radius) {
+				if checkDistance(sessionLatitude, message.Latitude, sessionLongitude, message.Longitude, int(sessionRadius), message.Radius) {
 
 					notifications = append(notifications, message)
 				}
