@@ -393,8 +393,10 @@ func main() {
 	http.HandleFunc("/unsubscribe", s.unsubscribe)
 	http.HandleFunc("/publish", s.publish)
 
-	log.Println("Listening on :8080...")
-	err := http.ListenAndServe(":8080", nil)
+	//log.Println("Listening on :8080...")
+	//err := http.ListenAndServe(":8080", nil)
+	log.Println("Listening on :80...")
+	err := http.ListenAndServe(":80", nil)
 
 	if err != nil {
 
