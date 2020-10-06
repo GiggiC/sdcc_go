@@ -153,9 +153,9 @@ func checkDistance(x1 float64, x2 float64, y1 float64, y2 float64, r1 int, r2 in
 
 func notificationsPage(res http.ResponseWriter, req *http.Request) {
 
-	if checkSession(res, req) != "" {
-		redirecter(res, req, "notifications.html", nil)
-	}
+	//if checkSession(res, req) != "" {
+	redirecter(res, req, "notifications.html", nil)
+	//}
 }
 
 func (s *server) notifications(res http.ResponseWriter, req *http.Request) {
@@ -373,6 +373,7 @@ func (s *server) initEB() {
 
 func main() {
 
+	initRedis()
 	s, db := initDB()
 	defer db.Close()
 	s.initEB()

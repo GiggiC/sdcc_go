@@ -1,25 +1,48 @@
 package main
 
 import (
+	"context"
 	"database/sql"
+	"fmt"
 	"github.com/dgrijalva/jwt-go"
+	"github.com/go-redis/redis"
+	"github.com/twinj/uuid"
 	"golang.org/x/crypto/bcrypt"
 	"html/template"
 	"net/http"
+	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"time"
 )
 
-var jwtKey = []byte("my_secret_key")
+var client *redis.Client
+var ctx = context.Background()
 
-type Credentials struct {
-	Password string `json:"password"`
-	Username string `json:"username"`
+func initRedis() {
+	//Initializing redis
+	dsn := os.Getenv("REDIS_DSN")
+	if len(dsn) == 0 {
+		dsn = "localhost:6379"
+	}
+	client = redis.NewClient(&redis.Options{
+		Addr: dsn, //redis port
+	})
+
+	_, err := client.Ping(ctx).Result()
+	if err != nil {
+		panic(err)
+	}
 }
 
-type Claims struct {
-	Username string `json:"username"`
-	jwt.StandardClaims
+type TokenDetails struct {
+	AccessToken  string
+	RefreshToken string
+	AccessUuid   string
+	RefreshUuid  string
+	AtExpires    int64
+	RtExpires    int64
 }
 
 func registrationPage(res http.ResponseWriter, req *http.Request) {
@@ -118,14 +141,133 @@ func loginPage(res http.ResponseWriter, req *http.Request) {
 	http.Redirect(res, req, "/notificationsPage", 301)
 }
 
+func CreateToken(email string) (*TokenDetails, error) {
+
+	td := &TokenDetails{}
+	td.AtExpires = time.Now().Add(time.Minute * 15).Unix()
+	td.AccessUuid = uuid.NewV4().String()
+
+	td.RtExpires = time.Now().Add(time.Hour * 24 * 7).Unix()
+	td.RefreshUuid = uuid.NewV4().String()
+
+	var err error
+	//Creating Access Token
+	os.Setenv("ACCESS_SECRET", "jdnfksdmfksd") //this should be in an env file
+	atClaims := jwt.MapClaims{}
+	atClaims["authorized"] = true
+	atClaims["access_uuid"] = td.AccessUuid
+	atClaims["email"] = email
+	atClaims["exp"] = td.AtExpires
+	at := jwt.NewWithClaims(jwt.SigningMethodHS256, atClaims)
+	td.AccessToken, err = at.SignedString([]byte(os.Getenv("ACCESS_SECRET")))
+
+	if err != nil {
+		return nil, err
+	}
+
+	//Creating Refresh Token
+	os.Setenv("REFRESH_SECRET", "mcmvmkmsdnfsdmfdsjf") //this should be in an env file
+	rtClaims := jwt.MapClaims{}
+	rtClaims["refresh_uuid"] = td.RefreshUuid
+	rtClaims["user_id"] = email
+	rtClaims["exp"] = td.RtExpires
+	rt := jwt.NewWithClaims(jwt.SigningMethodHS256, rtClaims)
+	td.RefreshToken, err = rt.SignedString([]byte(os.Getenv("REFRESH_SECRET")))
+	if err != nil {
+		return nil, err
+	}
+	return td, nil
+}
+
+func CreateAuth(email string, td *TokenDetails) error {
+	at := time.Unix(td.AtExpires, 0) //converting Unix to UTC(to Time object)
+	rt := time.Unix(td.RtExpires, 0)
+	now := time.Now()
+
+	errAccess := client.Set(ctx, td.AccessUuid, email, at.Sub(now)).Err()
+	if errAccess != nil {
+		return errAccess
+	}
+	errRefresh := client.Set(ctx, td.RefreshUuid, email, rt.Sub(now)).Err()
+	if errRefresh != nil {
+		return errRefresh
+	}
+	return nil
+}
+
+func VerifyToken(r *http.Request) (*jwt.Token, error) {
+	tokenString := ExtractToken(r)
+	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+		//Make sure that the token method conform to "SigningMethodHMAC"
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+		}
+		return []byte(os.Getenv("ACCESS_SECRET")), nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return token, nil
+}
+
+func TokenValid(r *http.Request) error {
+	token, err := VerifyToken(r)
+	if err != nil {
+		return err
+	}
+	if _, ok := token.Claims.(jwt.Claims); !ok && !token.Valid {
+		return err
+	}
+	return nil
+}
+func ExtractToken(r *http.Request) string {
+	bearToken := r.Header.Get("Authorization")
+	//normally Authorization the_token_xxx
+	strArr := strings.Split(bearToken, " ")
+	if len(strArr) == 2 {
+		return strArr[1]
+	}
+	return ""
+}
+
+type AccessDetails struct {
+	AccessUuid string
+	Email      string
+}
+
+func ExtractTokenMetadata(r *http.Request) (*AccessDetails, error) {
+	token, err := VerifyToken(r)
+	if err != nil {
+		return nil, err
+	}
+	claims, ok := token.Claims.(jwt.MapClaims)
+	if ok && token.Valid {
+		accessUuid, ok := claims["access_uuid"].(string)
+		if !ok {
+			return nil, err
+		}
+		email := fmt.Sprint(claims["email"])
+		return &AccessDetails{
+			AccessUuid: accessUuid,
+			Email:      email,
+		}, nil
+	}
+	return nil, err
+}
+
+func FetchAuth(authD *AccessDetails) (uint64, error) {
+	userid, err := client.Get(ctx, authD.AccessUuid).Result()
+	if err != nil {
+		return 0, err
+	}
+	userID, _ := strconv.ParseUint(userid, 10, 64)
+	return userID, nil
+}
+
 func (s *server) login(res http.ResponseWriter, req *http.Request) {
 
 	email := req.FormValue("email")
 	password := req.FormValue("password")
-
-	var creds Credentials
-
-	creds.Username = email
 
 	var databaseEmail string
 	var databasePassword string
@@ -145,34 +287,27 @@ func (s *server) login(res http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	// Declare the expiration time of the token
-	// here, we have kept it as 5 minutes
-	expirationTime := time.Now().Add(5000 * time.Minute)
-	// Create the JWT claims, which includes the username and expiry time
-	claims := &Claims{
-		Username: creds.Username,
-		StandardClaims: jwt.StandardClaims{
-			// In JWT, the expiry time is expressed as unix milliseconds
-			ExpiresAt: expirationTime.Unix(),
-		},
-	}
+	token, err := CreateToken(email)
 
-	// Declare the token with the algorithm used for signing, and the claims
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	// Create the JWT string
-	tokenString, err := token.SignedString(jwtKey)
 	if err != nil {
-		// If there is an error in creating the JWT return an internal server error
-		res.WriteHeader(http.StatusInternalServerError)
+
+		res.WriteHeader(http.StatusUnprocessableEntity)
 		return
 	}
 
-	// Finally, we set the client cookie for "token" as the JWT we just generated
-	// we also set an expiry time which is the same as the token itself
+	saveErr := CreateAuth(email, token)
+	if saveErr != nil {
+		res.WriteHeader(http.StatusUnprocessableEntity)
+	}
+
 	http.SetCookie(res, &http.Cookie{
-		Name:    "token",
-		Value:   tokenString,
-		Expires: expirationTime,
+		Name:  "access_token",
+		Value: token.AccessToken,
+	})
+
+	http.SetCookie(res, &http.Cookie{
+		Name:  "refresh_token",
+		Value: token.RefreshToken,
 	})
 
 	//TODO 301
@@ -197,54 +332,26 @@ func logout(res http.ResponseWriter, req *http.Request) { //TODO BLACKLIST
 
 func checkSession(res http.ResponseWriter, req *http.Request) string {
 
-	// We can obtain the session token from the requests cookies, which come with every request
-	c, err := req.Cookie("token")
+	var td *Todo
+	if err := c.ShouldBindJSON(&td); err != nil {
+		c.JSON(http.StatusUnprocessableEntity, "invalid json")
+		return
+	}
+	tokenAuth, err := ExtractTokenMetadata(c.Request)
 	if err != nil {
-		if err == http.ErrNoCookie {
-			// If the cookie is not set, return an unauthorized status
-			res.WriteHeader(http.StatusUnauthorized)
-			return ""
-		}
-		// For any other type of error, return a bad request status
-		res.WriteHeader(http.StatusBadRequest)
-		return ""
+		c.JSON(http.StatusUnauthorized, "unauthorized")
+		return
 	}
-
-	// Get the JWT string from the cookie
-	tknStr := c.Value
-
-	// Initialize a new instance of `Claims`
-	claims := &Claims{}
-
-	// Parse the JWT string and store the result in `claims`.
-	// Note that we are passing the key in this method as well. This method will return an error
-	// if the token is invalid (if it has expired according to the expiry time we set on sign in),
-	// or if the signature does not match
-	tkn, err := jwt.ParseWithClaims(tknStr, claims, func(token *jwt.Token) (interface{}, error) {
-		return jwtKey, nil
-	})
-
+	userId, err = FetchAuth(tokenAuth)
 	if err != nil {
-
-		if err == jwt.ErrSignatureInvalid {
-
-			res.WriteHeader(http.StatusUnauthorized)
-			return ""
-		}
-
-		res.WriteHeader(http.StatusBadRequest)
-		return ""
+		c.JSON(http.StatusUnauthorized, "unauthorized")
+		return
 	}
+	td.UserID = userId
 
-	if !tkn.Valid {
-
-		res.WriteHeader(http.StatusUnauthorized)
-		return ""
-	}
-
-	// Finally, return the welcome message to the user, along with their
-	// username given in the token
-	return claims.Username
+	//you can proceed to save the Todo to a database
+	//but we will just return it to the caller here:
+	c.JSON(http.StatusCreated, td)
 }
 
 func redirecter(res http.ResponseWriter, req *http.Request, url string, results interface{}) {
