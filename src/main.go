@@ -154,11 +154,12 @@ func checkDistance(x1 float64, x2 float64, y1 float64, y2 float64, r1 int, r2 in
 
 func notificationsPage(c *gin.Context) {
 
-	fmt.Println("dentro")
-	redirecter(c, "notifications.html", "logged")
+	redirecter(c, "notifications.html", "logged", nil)
 }
 
 func (s *server) notifications(c *gin.Context) {
+
+	email := checkSession(c)
 
 	startTime := time.Now().Nanosecond()
 
@@ -169,8 +170,6 @@ func (s *server) notifications(c *gin.Context) {
 	sessionLatitude, _ := strconv.ParseFloat(latitudes[0], 64)
 	sessionLongitude, _ := strconv.ParseFloat(longitudes[0], 64)
 	sessionRadius, _ := strconv.ParseInt(radius[0], 10, 64)
-
-	email := checkSession(c)
 
 	data, err := s.db.Query("SELECT topic FROM subscriptions "+
 		"WHERE subscriber = $1", email)
@@ -258,13 +257,14 @@ func (s *server) subscriptionPage(c *gin.Context) {
 		results = append(results, tRes)
 	}
 
-	redirecter(c, "subscribe.html", results)
+	redirecter(c, "subscribe.html", "logged", results)
 }
 
-func (s *server) subscribe(c *gin.Context) {
+func (s *server) editSubscription(c *gin.Context) {
+
+	email := checkSession(c)
 
 	topics, ok := c.Request.URL.Query()["topic"]
-	subscriber := checkSession(c)
 
 	if !ok || len(topics[0]) < 1 {
 		log.Println("Url Param 'session' is missing")
@@ -272,52 +272,51 @@ func (s *server) subscribe(c *gin.Context) {
 	}
 
 	topic := topics[0]
-
-	sqlStatement := `INSERT INTO subscriptions (subscriber, topic) VALUES ($1, $2)`
-
-	_, err := s.db.Exec(sqlStatement, subscriber, topic)
+	data, err := s.db.Query("select topic from subscriptions where subscriber = $1 and topic = $2", email, topic)
 
 	if err != nil {
 		panic(err)
 	}
 
-	eb.topicSubscription(topic, subscriber)
+	if data.Next() {
 
-	http.Redirect(c.Writer, c.Request, "/subscriptionPage", 301)
-}
+		sqlStatement := `DELETE FROM subscriptions WHERE subscriber = $1 AND topic = $2`
 
-func (s *server) unsubscribe(c *gin.Context) {
+		_, err := s.db.Exec(sqlStatement, email, topic)
 
-	topics, ok := c.Request.URL.Query()["topic"]
-	subscriber := checkSession(c)
+		if err != nil {
+			fmt.Println("BBBBBB")
+			panic(err)
+		}
 
-	if !ok || len(topics[0]) < 1 {
-		log.Println("Url Param 'session' is missing")
-		return
+		eb.topicUnsubscription(email)
+
+	} else {
+
+		sqlStatement := `INSERT INTO subscriptions (subscriber, topic) VALUES ($1, $2)`
+
+		_, err := s.db.Exec(sqlStatement, email, topic)
+
+		if err != nil {
+			fmt.Println("CCCCCC")
+			panic(err)
+		}
+
+		eb.topicSubscription(topic, email)
+
 	}
 
-	topic := topics[0]
-
-	sqlStatement := `DELETE FROM subscriptions WHERE subscriber = $1 AND topic = $2`
-
-	_, err := s.db.Exec(sqlStatement, subscriber, topic)
-
-	if err != nil {
-		panic(err)
-	}
-
-	eb.topicUnsubscription(subscriber)
-
-	http.Redirect(c.Writer, c.Request, "/subscriptionPage", 301)
+	//c.Redirect(301, "/subscriptionPage")
 }
 
 func publishPage(c *gin.Context) {
 
-	redirecter(c, "publish.html", nil)
-
+	redirecter(c, "publish.html", "logged", nil)
 }
 
 func (s *server) publish(c *gin.Context) {
+
+	checkSession(c)
 
 	payloads, _ := c.Request.URL.Query()["payload"]
 	topics, _ := c.Request.URL.Query()["topic"]
@@ -346,7 +345,7 @@ func (s *server) publish(c *gin.Context) {
 	go eb.publishTo(topic, payload, radius, lifeTime, latitude, longitude)
 
 	//TODO 301
-	http.Redirect(c.Writer, c.Request, "/publishPage", 301)
+	c.Redirect(301, "/publishPage")
 }
 
 func (s *server) initEB() {
@@ -387,14 +386,13 @@ func main() {
 	router.POST("/registrationPage", registrationPage)
 	router.POST("/registrationError", registrationError)
 	router.POST("/login", s.login)
-	router.POST("/logout", TokenAuthMiddleware(), logout)
+	router.GET("/logout", TokenAuthMiddleware(), logout)
 	router.GET("/notificationsPage", TokenAuthMiddleware(), notificationsPage)
-	router.POST("/notifications", TokenAuthMiddleware(), s.notifications)
-	router.POST("/publishPage", TokenAuthMiddleware(), publishPage)
-	router.POST("/subscriptionPage", TokenAuthMiddleware(), s.subscriptionPage)
-	router.POST("/subscribe", TokenAuthMiddleware(), s.subscribe)
-	router.POST("/unsubscribe", TokenAuthMiddleware(), s.unsubscribe)
-	router.POST("/publish", TokenAuthMiddleware(), s.publish)
+	router.GET("/notifications", TokenAuthMiddleware(), s.notifications)
+	router.GET("/publishPage", TokenAuthMiddleware(), publishPage)
+	router.GET("/subscriptionPage", TokenAuthMiddleware(), s.subscriptionPage)
+	router.GET("/editSubscription", TokenAuthMiddleware(), s.editSubscription)
+	router.GET("/publish", TokenAuthMiddleware(), s.publish)
 
 	log.Println("Listening on :8080...")
 	err := router.Run(":8080")

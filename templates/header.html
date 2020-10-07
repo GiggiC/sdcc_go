@@ -53,7 +53,7 @@
         <span class="navbar-toggler-icon"></span>
     </button>
 
-    {{if eq .payload "not-logged"}}
+    {{if eq .status "not-logged"}}
 
         <ul class="navbar-nav px-3">
             <li class="nav-item text-nowrap">
@@ -75,7 +75,7 @@
 <div class="container-fluid">
     <div class="row">
 
-        {{if eq .payload "logged"}}
+        {{if eq .status "logged"}}
 
         <nav id="sidebarMenu" class="col-md-3 col-lg-2 d-md-block bg-light sidebar collapse">
             <div class="sidebar-sticky pt-3">

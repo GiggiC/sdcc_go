@@ -3,110 +3,110 @@
 <!--Embed the header.html template at this location-->
 {{ template "header.html" .}}
 
-    <main role="main" class="col-md-9 ml-sm-auto col-lg-10 px-md-4">
+<main role="main" class="col-md-9 ml-sm-auto col-lg-10 px-md-4">
 
-        <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
-            <h1 class="h2">Publish</h1>
-        </div>
+    <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+        <h1 class="h2">Publish</h1>
+    </div>
 
-        <div class="row">
+    <div class="row">
 
-            <div class="col-md-12 order-md-1">
+        <div class="col-md-12 order-md-1">
 
-                <form>
-                    <div class="row">
-                        <div class="col-md-6 mb-3">
-                            <label for="payload">Message</label>
-                            <input type="text" class="form-control" id="payload" placeholder="Message" value=""
-                                   required>
-                            <div class="invalid-feedback">
-                                Valid Message is required.
-                            </div>
-                        </div>
-
-                        <div class="col-md-6 mb-3">
-                            <label for="topic">Topic</label>
-                            <select class="custom-select d-block w-100" id="topic" required>
-                                <option value="Topic 1">Topic 1</option>
-                                <option value="Topic 2">Topic 2</option>
-                                <option value="Topic 3">Topic 3</option>
-                                <option value="Topic 4">Topic 4</option>
-                            </select>
-                            <div class="invalid-feedback">
-                                Please select a valid Topic.
-                            </div>
+            <form>
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label for="payload">Message</label>
+                        <input type="text" class="form-control" id="payload" placeholder="Message" value=""
+                               required>
+                        <div class="invalid-feedback">
+                            Valid Message is required.
                         </div>
                     </div>
 
-                    <div class="row">
-
-                        <div class="col-md-6 mb-3">
-                            <label for="radius">Radius (Km)</label>
-                            <input type="number" class="form-control" id="radius" placeholder="Radius" value=""
-                                   required>
-                            <div class="invalid-feedback">
-                                Valid radius is required.
-                            </div>
+                    <div class="col-md-6 mb-3">
+                        <label for="topic">Topic</label>
+                        <select class="custom-select d-block w-100" id="topic" required>
+                            <option value="Topic 1">Topic 1</option>
+                            <option value="Topic 2">Topic 2</option>
+                            <option value="Topic 3">Topic 3</option>
+                            <option value="Topic 4">Topic 4</option>
+                        </select>
+                        <div class="invalid-feedback">
+                            Please select a valid Topic.
                         </div>
+                    </div>
+                </div>
 
-                        <div class="col-md-6 mb-3">
-                            <label for="lifeTime">Life Time (Minutes)</label>
-                            <input type="number" class="form-control" id="lifeTime" placeholder="Life Time" value=""
-                                   required>
-                            <div class="invalid-feedback">
-                                Valid Life Time is required.
-                            </div>
+                <div class="row">
+
+                    <div class="col-md-6 mb-3">
+                        <label for="radius">Radius (Km)</label>
+                        <input type="number" class="form-control" id="radius" placeholder="Radius" value=""
+                               required>
+                        <div class="invalid-feedback">
+                            Valid radius is required.
                         </div>
-
                     </div>
 
-                    <input type="text" class="form-control" id="latitude" hidden value="">
-                    <input type="text" class="form-control" id="longitude" hidden value="">
+                    <div class="col-md-6 mb-3">
+                        <label for="lifeTime">Life Time (Minutes)</label>
+                        <input type="number" class="form-control" id="lifeTime" placeholder="Life Time" value=""
+                               required>
+                        <div class="invalid-feedback">
+                            Valid Life Time is required.
+                        </div>
+                    </div>
 
-                    <hr class="mb-4">
-                    <button class="btn btn-primary btn-lg btn-block" onclick="getLocation()" type="submit">Send Message
-                    </button>
-                </form>
+                </div>
 
-            </div>
+                <input type="text" class="form-control" id="latitude" hidden value="">
+                <input type="text" class="form-control" id="longitude" hidden value="">
+
+                <hr class="mb-4">
+                <button class="btn btn-primary btn-lg btn-block" onclick="getLocation()" type="submit">Send Message
+                </button>
+            </form>
+
         </div>
-    </main>
+    </div>
+</main>
 
-    <script>
-        function getLocation() {
+<script>
+    function getLocation() {
 
-            // Check whether browser supports Geolocation API or not
-            if (navigator.geolocation) { // Supported
-                navigator.geolocation.getCurrentPosition(getPosition);
-            } else { // Not supported
-                alert("Oops! This browser does not support HTML Geolocation.");
+        // Check whether browser supports Geolocation API or not
+        if (navigator.geolocation) { // Supported
+            navigator.geolocation.getCurrentPosition(getPosition);
+        } else { // Not supported
+            alert("Oops! This browser does not support HTML Geolocation.");
+        }
+    }
+
+    function getPosition(position) {
+
+        const payload = document.getElementById('payload').value;
+        const topic = document.getElementById('topic').value;
+        const radius = document.getElementById('radius').value;
+        const lifeTime = document.getElementById('lifeTime').value;
+        const latitude = position.coords.latitude;
+        const longitude = position.coords.longitude;
+
+        $.ajax({
+            url: "/publish",
+            data: {
+                payload: payload, topic: topic, radius: radius, lifeTime: lifeTime,
+                latitude: latitude, longitude: longitude
+            }, //If the request needs any data
+            success: function () {
+                window.location.href = '/publishPage'
             }
-        }
+        }).done(function (data) {
+        });
+    }
+</script>
 
-        function getPosition(position) {
+<!--index.html-->
 
-            const payload = document.getElementById('payload').value;
-            const topic = document.getElementById('topic').value;
-            const radius = document.getElementById('radius').value;
-            const lifeTime = document.getElementById('lifeTime').value;
-            const latitude = position.coords.latitude;
-            const longitude = position.coords.longitude;
-
-            $.ajax({
-                url: "/publish",
-                data: {
-                    payload: payload, topic: topic, radius: radius, lifeTime: lifeTime,
-                    latitude: latitude, longitude: longitude
-                }, //If the request needs any data
-                success: function () {
-                    window.location.href = '/publishPage'
-                }
-            }).done(function (data) {
-            });
-        }
-    </script>
-
-    <!--index.html-->
-
-    <!--Embed the header.html template at this location-->
-    {{ template "footer.html" .}}
+<!--Embed the header.html template at this location-->
+{{ template "footer.html" .}}

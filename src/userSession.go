@@ -13,8 +13,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"strconv"
-	"strings"
 	"time"
 )
 
@@ -134,8 +132,8 @@ func loginPage(c *gin.Context) {
 		"login.html",
 		// Pass the data that the page uses (in this case, 'title')
 		gin.H{
-			"title":   "",
-			"payload": "not-logged",
+			"title":  "",
+			"status": "not-logged",
 		},
 	)
 }
@@ -179,24 +177,30 @@ func CreateToken(email string) (*TokenDetails, error) {
 }
 
 func CreateAuth(email string, td *TokenDetails) error {
+
 	at := time.Unix(td.AtExpires, 0) //converting Unix to UTC(to Time object)
 	rt := time.Unix(td.RtExpires, 0)
 	now := time.Now()
 
 	errAccess := client.Set(ctx, td.AccessUuid, email, at.Sub(now)).Err()
+
 	if errAccess != nil {
 		return errAccess
 	}
+
 	errRefresh := client.Set(ctx, td.RefreshUuid, email, rt.Sub(now)).Err()
+
 	if errRefresh != nil {
 		return errRefresh
 	}
+
 	return nil
 }
 
 func VerifyToken(r *http.Request) (*jwt.Token, error) {
 
 	tokenString := ExtractToken(r)
+
 	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
 
 		//Make sure that the token method conform to "SigningMethodHMAC"
@@ -222,17 +226,13 @@ func TokenValid(r *http.Request) error {
 	}
 	return nil
 }
+
 func ExtractToken(r *http.Request) string {
 
-	bearToken := r.Header.Get("Authorization")
+	accessToken, _ := r.Cookie("access_token")
+	//refreshToken, _ := r.Cookie("refresh_token")
 
-	//normally Authorization the_token_xxx
-	strArr := strings.Split(bearToken, " ")
-	if len(strArr) == 2 {
-		return strArr[1]
-	}
-
-	return ""
+	return accessToken.Value
 }
 
 type AccessDetails struct {
@@ -241,40 +241,53 @@ type AccessDetails struct {
 }
 
 func ExtractTokenMetadata(r *http.Request) (*AccessDetails, error) {
+
 	token, err := VerifyToken(r)
+
 	if err != nil {
 		return nil, err
 	}
+
 	claims, ok := token.Claims.(jwt.MapClaims)
+
 	if ok && token.Valid {
+
 		accessUuid, ok := claims["access_uuid"].(string)
+
 		if !ok {
 			return nil, err
 		}
+
 		email := fmt.Sprint(claims["email"])
+
 		return &AccessDetails{
 			AccessUuid: accessUuid,
 			Email:      email,
 		}, nil
 	}
+
 	return nil, err
 }
 
-func FetchAuth(authD *AccessDetails) (uint64, string, error) {
-	userid, err := client.Get(ctx, authD.AccessUuid).Result()
-	email, err := client.Get(ctx, authD.Email).Result()
+func FetchAuth(authD *AccessDetails) (string, error) {
+
+	email, err := client.Get(ctx, authD.AccessUuid).Result()
+
 	if err != nil {
-		return 0, "", err
+		return "", err
 	}
-	userID, _ := strconv.ParseUint(userid, 10, 64)
-	return userID, email, nil
+
+	return email, nil
 }
 
 func DeleteAuth(givenUuid string) (int64, error) {
+
 	deleted, err := client.Del(ctx, givenUuid).Result()
+
 	if err != nil {
 		return 0, err
 	}
+
 	return deleted, nil
 }
 
@@ -325,63 +338,76 @@ func (s *server) login(c *gin.Context) {
 		c.JSON(http.StatusUnprocessableEntity, saveErr.Error())
 	}
 
-	tokens := map[string]string{
-		"access_token":  ts.AccessToken,
-		"refresh_token": ts.RefreshToken,
-	}
-	c.JSON(http.StatusOK, tokens)
+	http.SetCookie(c.Writer, &http.Cookie{
+		Name:    "access_token",
+		Value:   ts.AccessToken,
+		Expires: time.Now().Add(time.Minute * 15),
+	})
+
+	http.SetCookie(c.Writer, &http.Cookie{
+		Name:    "refresh_token",
+		Value:   ts.RefreshToken,
+		Expires: time.Now().Add(time.Hour * 24 * 7),
+	})
+
+	c.Redirect(301, "/notificationsPage")
 }
 
 func logout(c *gin.Context) {
 
+	fmt.Println("AAAAAA")
+
 	au, err := ExtractTokenMetadata(c.Request)
+
 	if err != nil {
+
 		c.JSON(http.StatusUnauthorized, "unauthorized")
 		return
 	}
+
+	fmt.Println("BBBBBB")
+
 	deleted, delErr := DeleteAuth(au.AccessUuid)
+
 	if delErr != nil || deleted == 0 { //if any goes wrong
+
 		c.JSON(http.StatusUnauthorized, "unauthorized")
 		return
 	}
-	c.JSON(http.StatusOK, "Successfully logged out")
 
-	http.Redirect(c.Writer, c.Request, "/", 301)
-}
+	fmt.Println("CCCCC")
 
-type Todo struct {
-	UserID uint64 `json:"user_id"`
-	Title  string `json:"title"`
+	accessToken, _ := c.Request.Cookie("access_token")
+
+	http.SetCookie(c.Writer, &http.Cookie{
+		Name:    "access_token",
+		Value:   accessToken.Value,
+		Expires: time.Now(),
+	})
+
+	c.Redirect(301, "/")
 }
 
 func checkSession(c *gin.Context) string {
 
-	var td *Todo
-	if err := c.ShouldBindJSON(&td); err != nil {
-		c.JSON(http.StatusUnprocessableEntity, "invalid json")
-		return ""
-	}
 	tokenAuth, err := ExtractTokenMetadata(c.Request)
-	if err != nil {
-		c.JSON(http.StatusUnauthorized, "unauthorized")
-		return ""
-	}
-	userId, email, err := FetchAuth(tokenAuth)
+
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, "unauthorized")
 		return ""
 	}
 
-	td.UserID = userId
+	email, err := FetchAuth(tokenAuth)
 
-	//you can proceed to save the Todo to a database
-	//but we will just return it to the caller here:
-	c.JSON(http.StatusCreated, td)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, "unauthorized")
+		return ""
+	}
 
 	return email
 }
 
-func redirecter(c *gin.Context, url string, payload interface{}) {
+func redirecter(c *gin.Context, url string, status string, results interface{}) {
 
 	c.HTML(
 		// Set the HTTP status to 200 (OK)
@@ -391,7 +417,8 @@ func redirecter(c *gin.Context, url string, payload interface{}) {
 		// Pass the data that the page uses (in this case, 'title')
 		gin.H{
 			"title":   "",
-			"payload": payload,
+			"status":  status,
+			"results": results,
 		},
 	)
 }
