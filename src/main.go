@@ -4,6 +4,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/gin-gonic/gin"
 	_ "github.com/lib/pq"
 	"github.com/umahmood/haversine"
 	"log"
@@ -151,26 +152,25 @@ func checkDistance(x1 float64, x2 float64, y1 float64, y2 float64, r1 int, r2 in
 	return true
 }
 
-func notificationsPage(res http.ResponseWriter, req *http.Request) {
+func notificationsPage(c *gin.Context) {
 
-	//if checkSession(res, req) != "" {
-	redirecter(res, req, "notifications.html", nil)
-	//}
+	fmt.Println("dentro")
+	redirecter(c, "notifications.html", "logged")
 }
 
-func (s *server) notifications(res http.ResponseWriter, req *http.Request) {
+func (s *server) notifications(c *gin.Context) {
 
 	startTime := time.Now().Nanosecond()
 
-	latitudes, _ := req.URL.Query()["latitude"]
-	longitudes, _ := req.URL.Query()["longitude"]
-	radius, _ := req.URL.Query()["radius"]
+	latitudes, _ := c.Request.URL.Query()["latitude"]
+	longitudes, _ := c.Request.URL.Query()["longitude"]
+	radius, _ := c.Request.URL.Query()["radius"]
 
 	sessionLatitude, _ := strconv.ParseFloat(latitudes[0], 64)
 	sessionLongitude, _ := strconv.ParseFloat(longitudes[0], 64)
 	sessionRadius, _ := strconv.ParseInt(radius[0], 10, 64)
 
-	email := checkSession(res, req)
+	email := checkSession(c)
 
 	data, err := s.db.Query("SELECT topic FROM subscriptions "+
 		"WHERE subscriber = $1", email)
@@ -212,62 +212,59 @@ func (s *server) notifications(res http.ResponseWriter, req *http.Request) {
 
 	result, _ := json.Marshal(notifications)
 
-	res.Header().Set("Content-Type", "application/json")
+	c.Writer.Header().Set("Content-Type", "application/json")
 
-	_, err = res.Write(result)
+	_, err = c.Writer.Write(result)
 
 	if err != nil {
 		fmt.Println(err)
 	}
 }
 
-func (s *server) subscriptionPage(res http.ResponseWriter, req *http.Request) {
+func (s *server) subscriptionPage(c *gin.Context) {
 
-	if checkSession(res, req) != "" {
+	email := checkSession(c)
 
-		email := checkSession(res, req)
+	data, err := s.db.Query("SELECT topic FROM subscriptions"+
+		" WHERE subscriber = $1", email)
 
-		data, err := s.db.Query("SELECT topic FROM subscriptions"+
-			" WHERE subscriber = $1", email)
-
-		if err != nil {
-			panic(err)
-		}
-
-		tRes := Topic{}
-		var results []Topic
-
-		for data.Next() {
-			var name string
-			data.Scan(&name)
-			tRes.Name = name
-			tRes.Flag = true
-			results = append(results, tRes)
-		}
-
-		data, err = s.db.Query("select t.name from topics t where t.name "+
-			"not in (select s.topic from subscriptions s where s.subscriber = $1)", email)
-
-		if err != nil {
-			panic(err)
-		}
-
-		for data.Next() {
-			var name string
-			data.Scan(&name)
-			tRes.Name = name
-			tRes.Flag = false
-			results = append(results, tRes)
-		}
-
-		redirecter(res, req, "subscribe.html", results)
+	if err != nil {
+		panic(err)
 	}
+
+	tRes := Topic{}
+	var results []Topic
+
+	for data.Next() {
+		var name string
+		data.Scan(&name)
+		tRes.Name = name
+		tRes.Flag = true
+		results = append(results, tRes)
+	}
+
+	data, err = s.db.Query("select t.name from topics t where t.name "+
+		"not in (select s.topic from subscriptions s where s.subscriber = $1)", email)
+
+	if err != nil {
+		panic(err)
+	}
+
+	for data.Next() {
+		var name string
+		data.Scan(&name)
+		tRes.Name = name
+		tRes.Flag = false
+		results = append(results, tRes)
+	}
+
+	redirecter(c, "subscribe.html", results)
 }
 
-func (s *server) subscribe(res http.ResponseWriter, req *http.Request) {
+func (s *server) subscribe(c *gin.Context) {
 
-	topics, ok := req.URL.Query()["topic"]
-	subscriber := checkSession(res, req)
+	topics, ok := c.Request.URL.Query()["topic"]
+	subscriber := checkSession(c)
 
 	if !ok || len(topics[0]) < 1 {
 		log.Println("Url Param 'session' is missing")
@@ -286,13 +283,13 @@ func (s *server) subscribe(res http.ResponseWriter, req *http.Request) {
 
 	eb.topicSubscription(topic, subscriber)
 
-	http.Redirect(res, req, "/subscriptionPage", 301)
+	http.Redirect(c.Writer, c.Request, "/subscriptionPage", 301)
 }
 
-func (s *server) unsubscribe(res http.ResponseWriter, req *http.Request) {
+func (s *server) unsubscribe(c *gin.Context) {
 
-	topics, ok := req.URL.Query()["topic"]
-	subscriber := checkSession(res, req)
+	topics, ok := c.Request.URL.Query()["topic"]
+	subscriber := checkSession(c)
 
 	if !ok || len(topics[0]) < 1 {
 		log.Println("Url Param 'session' is missing")
@@ -311,24 +308,23 @@ func (s *server) unsubscribe(res http.ResponseWriter, req *http.Request) {
 
 	eb.topicUnsubscription(subscriber)
 
-	http.Redirect(res, req, "/subscriptionPage", 301)
+	http.Redirect(c.Writer, c.Request, "/subscriptionPage", 301)
 }
 
-func publishPage(res http.ResponseWriter, req *http.Request) {
+func publishPage(c *gin.Context) {
 
-	if checkSession(res, req) != "" {
-		redirecter(res, req, "publish.html", nil)
-	}
+	redirecter(c, "publish.html", nil)
+
 }
 
-func (s *server) publish(res http.ResponseWriter, req *http.Request) {
+func (s *server) publish(c *gin.Context) {
 
-	payloads, _ := req.URL.Query()["payload"]
-	topics, _ := req.URL.Query()["topic"]
-	radiuss, _ := req.URL.Query()["radius"]
-	lifeTimes, _ := req.URL.Query()["lifeTime"]
-	latitudes, _ := req.URL.Query()["latitude"]
-	longitudes, _ := req.URL.Query()["longitude"]
+	payloads, _ := c.Request.URL.Query()["payload"]
+	topics, _ := c.Request.URL.Query()["topic"]
+	radiuss, _ := c.Request.URL.Query()["radius"]
+	lifeTimes, _ := c.Request.URL.Query()["lifeTime"]
+	latitudes, _ := c.Request.URL.Query()["latitude"]
+	longitudes, _ := c.Request.URL.Query()["longitude"]
 
 	payload := payloads[0]
 	topic := topics[0]
@@ -350,7 +346,7 @@ func (s *server) publish(res http.ResponseWriter, req *http.Request) {
 	go eb.publishTo(topic, payload, radius, lifeTime, latitude, longitude)
 
 	//TODO 301
-	http.Redirect(res, req, "/publishPage", 301)
+	http.Redirect(c.Writer, c.Request, "/publishPage", 301)
 }
 
 func (s *server) initEB() {
@@ -379,27 +375,29 @@ func main() {
 	s.initEB()
 	go eb.garbageCollection()
 
-	fs := http.FileServer(http.Dir("../static"))
-	http.Handle("/static/", http.StripPrefix("/static/", fs))
+	//fs := http.FileServer(http.Dir("../static"))
+	//http.Handle("/static/", http.StripPrefix("/static/", fs))
 
-	http.HandleFunc("/", loginPage)
-	http.HandleFunc("/registration", s.registration)
-	http.HandleFunc("/registrationPage", registrationPage)
-	http.HandleFunc("/registrationError", registrationError)
-	http.HandleFunc("/login", s.login)
-	http.HandleFunc("/logout", logout)
-	http.HandleFunc("/notificationsPage", notificationsPage)
-	http.HandleFunc("/notifications", s.notifications)
-	http.HandleFunc("/publishPage", publishPage)
-	http.HandleFunc("/subscriptionPage", s.subscriptionPage)
-	http.HandleFunc("/subscribe", s.subscribe)
-	http.HandleFunc("/unsubscribe", s.unsubscribe)
-	http.HandleFunc("/publish", s.publish)
+	router.StaticFS("/static/", http.Dir("../static"))
+
+	router.LoadHTMLGlob("../templates/*")
+
+	router.GET("/", loginPage)
+	router.POST("/registration", s.registration)
+	router.POST("/registrationPage", registrationPage)
+	router.POST("/registrationError", registrationError)
+	router.POST("/login", s.login)
+	router.POST("/logout", TokenAuthMiddleware(), logout)
+	router.GET("/notificationsPage", TokenAuthMiddleware(), notificationsPage)
+	router.POST("/notifications", TokenAuthMiddleware(), s.notifications)
+	router.POST("/publishPage", TokenAuthMiddleware(), publishPage)
+	router.POST("/subscriptionPage", TokenAuthMiddleware(), s.subscriptionPage)
+	router.POST("/subscribe", TokenAuthMiddleware(), s.subscribe)
+	router.POST("/unsubscribe", TokenAuthMiddleware(), s.unsubscribe)
+	router.POST("/publish", TokenAuthMiddleware(), s.publish)
 
 	log.Println("Listening on :8080...")
-	err := http.ListenAndServe(":8080", nil)
-	//log.Println("Listening on :80...")
-	//err := http.ListenAndServe(":80", nil)
+	err := router.Run(":8080")
 
 	if err != nil {
 

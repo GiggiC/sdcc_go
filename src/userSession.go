@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"github.com/dgrijalva/jwt-go"
+	"github.com/gin-gonic/gin"
 	"github.com/go-redis/redis"
 	"github.com/twinj/uuid"
 	"golang.org/x/crypto/bcrypt"
@@ -15,6 +16,10 @@ import (
 	"strconv"
 	"strings"
 	"time"
+)
+
+var (
+	router = gin.Default()
 )
 
 var client *redis.Client
@@ -45,10 +50,10 @@ type TokenDetails struct {
 	RtExpires    int64
 }
 
-func registrationPage(res http.ResponseWriter, req *http.Request) {
+func registrationPage(c *gin.Context) {
 
 	// Check if user is authenticated
-	if checkSession(res, req) == "" {
+	if checkSession(c) == "" {
 
 		data := Object{
 			Status: "not-logged",
@@ -58,19 +63,19 @@ func registrationPage(res http.ResponseWriter, req *http.Request) {
 		fp := filepath.Join("../templates", "registration.html")
 
 		tmpl, _ := template.ParseFiles(lp, fp)
-		tmpl.ExecuteTemplate(res, "layout", data)
+		tmpl.ExecuteTemplate(c.Writer, "layout", data)
 
 		return
 	}
 
-	http.Redirect(res, req, "/notificationsPage", 301)
+	http.Redirect(c.Writer, c.Request, "/notificationsPage", 301)
 }
 
-func (s *server) registration(res http.ResponseWriter, req *http.Request) {
+func (s *server) registration(c *gin.Context) {
 
-	username := req.FormValue("username")
-	password := req.FormValue("password")
-	email := req.FormValue("email")
+	username := c.Request.FormValue("username")
+	password := c.Request.FormValue("password")
+	email := c.Request.FormValue("email")
 
 	var user string
 
@@ -84,7 +89,7 @@ func (s *server) registration(res http.ResponseWriter, req *http.Request) {
 
 		if err != nil {
 
-			http.Error(res, "Server error, unable to create your account.", 500)
+			http.Error(c.Writer, "Server error, unable to create your account.", 500)
 			return
 		}
 
@@ -96,49 +101,43 @@ func (s *server) registration(res http.ResponseWriter, req *http.Request) {
 			panic(err)
 		}
 
-		http.Redirect(res, req, "/loginPage", 301)
+		http.Redirect(c.Writer, c.Request, "/loginPage", 301)
 		return
 
 	case err != nil:
 
-		http.Redirect(res, req, "/registrationError", 500)
+		http.Redirect(c.Writer, c.Request, "/registrationError", 500)
 		return
 
 	default:
 
-		http.Redirect(res, req, "/registrationError", 301)
+		http.Redirect(c.Writer, c.Request, "/registrationError", 301)
 		return
 	}
 }
 
-func registrationError(w http.ResponseWriter, r *http.Request) {
+func registrationError(c *gin.Context) {
 
 	lp := filepath.Join("../templates", "layout.html")
 	fp := filepath.Join("../templates", "registrationError.html")
 
 	tmpl, _ := template.ParseFiles(lp, fp)
-	tmpl.ExecuteTemplate(w, "layout", nil)
+	tmpl.ExecuteTemplate(c.Writer, "layout", nil)
 }
 
-func loginPage(res http.ResponseWriter, req *http.Request) {
+func loginPage(c *gin.Context) {
 
-	// Check if user is authenticated
-	if checkSession(res, req) == "" {
-
-		data := Object{
-			Status: "not-logged",
-		}
-
-		lp := filepath.Join("../templates", "layout.html")
-		fp := filepath.Join("../templates", "login.html")
-
-		tmpl, _ := template.ParseFiles(lp, fp)
-		tmpl.ExecuteTemplate(res, "layout", data)
-
-		return
-	}
-
-	http.Redirect(res, req, "/notificationsPage", 301)
+	c.HTML(
+		// Set the HTTP status to 200 (OK)
+		http.StatusOK,
+		// Use the index.html template
+		"login.html",
+		// Pass the data that the page uses (in this case, 'title')
+		gin.H{
+			"title":   "",
+			"payload": "not-logged",
+		},
+	)
 }
 
 func CreateToken(email string) (*TokenDetails, error) {
@@ -169,7 +168,7 @@ func CreateToken(email string) (*TokenDetails, error) {
 	os.Setenv("REFRESH_SECRET", "mcmvmkmsdnfsdmfdsjf") //this should be in an env file
 	rtClaims := jwt.MapClaims{}
 	rtClaims["refresh_uuid"] = td.RefreshUuid
-	rtClaims["user_id"] = email
+	rtClaims["email"] = email
 	rtClaims["exp"] = td.RtExpires
 	rt := jwt.NewWithClaims(jwt.SigningMethodHS256, rtClaims)
 	td.RefreshToken, err = rt.SignedString([]byte(os.Getenv("REFRESH_SECRET")))
@@ -196,8 +195,10 @@ func CreateAuth(email string, td *TokenDetails) error {
 }
 
 func VerifyToken(r *http.Request) (*jwt.Token, error) {
+
 	tokenString := ExtractToken(r)
 	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+
 		//Make sure that the token method conform to "SigningMethodHMAC"
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
@@ -211,6 +212,7 @@ func VerifyToken(r *http.Request) (*jwt.Token, error) {
 }
 
 func TokenValid(r *http.Request) error {
+
 	token, err := VerifyToken(r)
 	if err != nil {
 		return err
@@ -221,12 +223,15 @@ func TokenValid(r *http.Request) error {
 	return nil
 }
 func ExtractToken(r *http.Request) string {
+
 	bearToken := r.Header.Get("Authorization")
+
 	//normally Authorization the_token_xxx
 	strArr := strings.Split(bearToken, " ")
 	if len(strArr) == 2 {
 		return strArr[1]
 	}
+
 	return ""
 }
 
@@ -255,19 +260,42 @@ func ExtractTokenMetadata(r *http.Request) (*AccessDetails, error) {
 	return nil, err
 }
 
-func FetchAuth(authD *AccessDetails) (uint64, error) {
+func FetchAuth(authD *AccessDetails) (uint64, string, error) {
 	userid, err := client.Get(ctx, authD.AccessUuid).Result()
+	email, err := client.Get(ctx, authD.Email).Result()
+	if err != nil {
+		return 0, "", err
+	}
+	userID, _ := strconv.ParseUint(userid, 10, 64)
+	return userID, email, nil
+}
+
+func DeleteAuth(givenUuid string) (int64, error) {
+	deleted, err := client.Del(ctx, givenUuid).Result()
 	if err != nil {
 		return 0, err
 	}
-	userID, _ := strconv.ParseUint(userid, 10, 64)
-	return userID, nil
+	return deleted, nil
 }
 
-func (s *server) login(res http.ResponseWriter, req *http.Request) {
+func TokenAuthMiddleware() gin.HandlerFunc {
 
-	email := req.FormValue("email")
-	password := req.FormValue("password")
+	return func(c *gin.Context) {
+		err := TokenValid(c.Request)
+
+		if err != nil {
+			c.JSON(http.StatusUnauthorized, err.Error())
+			c.Abort()
+			return
+		}
+		c.Next()
+	}
+}
+
+func (s *server) login(c *gin.Context) {
+
+	email := c.Request.FormValue("email")
+	password := c.Request.FormValue("password")
 
 	var databaseEmail string
 	var databasePassword string
@@ -276,94 +304,94 @@ func (s *server) login(res http.ResponseWriter, req *http.Request) {
 
 	if err != nil {
 		//res.WriteHeader(http.StatusUnauthorized) TODO
-		http.Redirect(res, req, "/login", 301)
+		http.Redirect(c.Writer, c.Request, "/login", 301)
 		return
 	}
 
 	err = bcrypt.CompareHashAndPassword([]byte(databasePassword), []byte(password))
 	if err != nil {
 		//res.WriteHeader(http.StatusUnauthorized) TODO
-		http.Redirect(res, req, "/login", 301)
+		http.Redirect(c.Writer, c.Request, "/login", 301)
 		return
 	}
 
-	token, err := CreateToken(email)
-
+	ts, err := CreateToken(email)
 	if err != nil {
-
-		res.WriteHeader(http.StatusUnprocessableEntity)
+		c.JSON(http.StatusUnprocessableEntity, err.Error())
 		return
 	}
-
-	saveErr := CreateAuth(email, token)
+	saveErr := CreateAuth(email, ts)
 	if saveErr != nil {
-		res.WriteHeader(http.StatusUnprocessableEntity)
+		c.JSON(http.StatusUnprocessableEntity, saveErr.Error())
 	}
 
-	http.SetCookie(res, &http.Cookie{
-		Name:  "access_token",
-		Value: token.AccessToken,
-	})
-
-	http.SetCookie(res, &http.Cookie{
-		Name:  "refresh_token",
-		Value: token.RefreshToken,
-	})
-
-	//TODO 301
-	http.Redirect(res, req, "/notificationsPage", 301)
+	tokens := map[string]string{
+		"access_token":  ts.AccessToken,
+		"refresh_token": ts.RefreshToken,
+	}
+	c.JSON(http.StatusOK, tokens)
 }
 
-func logout(res http.ResponseWriter, req *http.Request) { //TODO BLACKLIST
+func logout(c *gin.Context) {
 
-	// We can obtain the session token from the requests cookies, which come with every request
-	c, _ := req.Cookie("token")
+	au, err := ExtractTokenMetadata(c.Request)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	deleted, delErr := DeleteAuth(au.AccessUuid)
+	if delErr != nil || deleted == 0 { //if any goes wrong
+		c.JSON(http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	c.JSON(http.StatusOK, "Successfully logged out")
 
-	// Get the JWT string from the cookie
-	tknStr := c.Value
-	http.SetCookie(res, &http.Cookie{
-		Name:    "token",
-		Value:   tknStr,
-		Expires: time.Now(),
-	})
-
-	http.Redirect(res, req, "/", 301)
+	http.Redirect(c.Writer, c.Request, "/", 301)
 }
 
-func checkSession(res http.ResponseWriter, req *http.Request) string {
+type Todo struct {
+	UserID uint64 `json:"user_id"`
+	Title  string `json:"title"`
+}
+
+func checkSession(c *gin.Context) string {
 
 	var td *Todo
 	if err := c.ShouldBindJSON(&td); err != nil {
 		c.JSON(http.StatusUnprocessableEntity, "invalid json")
-		return
+		return ""
 	}
 	tokenAuth, err := ExtractTokenMetadata(c.Request)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, "unauthorized")
-		return
+		return ""
 	}
-	userId, err = FetchAuth(tokenAuth)
+	userId, email, err := FetchAuth(tokenAuth)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, "unauthorized")
-		return
+		return ""
 	}
+
 	td.UserID = userId
 
 	//you can proceed to save the Todo to a database
 	//but we will just return it to the caller here:
 	c.JSON(http.StatusCreated, td)
+
+	return email
 }
 
-func redirecter(res http.ResponseWriter, req *http.Request, url string, results interface{}) {
+func redirecter(c *gin.Context, url string, payload interface{}) {
 
-	data := Object{
-		Status: "logged",
-		Data:   results,
-	}
-
-	lp := filepath.Join("../templates", "layout.html")
-	fp := filepath.Join("../templates", url)
-
-	tmpl, _ := template.ParseFiles(lp, fp)
-	tmpl.ExecuteTemplate(res, "layout", data)
+	c.HTML(
+		// Set the HTTP status to 200 (OK)
+		http.StatusOK,
+		// Use the index.html template
+		url,
+		// Pass the data that the page uses (in this case, 'title')
+		gin.H{
+			"title":   "",
+			"payload": payload,
+		},
+	)
 }

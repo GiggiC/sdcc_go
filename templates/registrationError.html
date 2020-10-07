@@ -1,6 +1,7 @@
-{{define "title"}}Dashboard Example{{end}}
+<!--index.html-->
 
-{{define "body"}}
+<!--Embed the header.html template at this location-->
+{{ template "header.html" .}}
 
     <main role="main" class="col-md-9 ml-sm-auto col-lg-10 px-md-4">
 
@@ -9,4 +10,7 @@
         </div>
     </main>
 
-{{end}}
+    <!--index.html-->
+
+    <!--Embed the header.html template at this location-->
+    {{ template "footer.html" .}}
