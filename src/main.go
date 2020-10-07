@@ -159,7 +159,10 @@ func notificationsPage(c *gin.Context) {
 
 func (s *server) notifications(c *gin.Context) {
 
-	email := checkSession(c)
+	checkSession(c)
+
+	ad, _ := ExtractTokenMetadata(c)
+	email := ad.Email
 
 	startTime := time.Now().Nanosecond()
 
@@ -222,7 +225,10 @@ func (s *server) notifications(c *gin.Context) {
 
 func (s *server) subscriptionPage(c *gin.Context) {
 
-	email := checkSession(c)
+	checkSession(c)
+
+	ad, _ := ExtractTokenMetadata(c)
+	email := ad.Email
 
 	data, err := s.db.Query("SELECT topic FROM subscriptions"+
 		" WHERE subscriber = $1", email)
@@ -262,7 +268,10 @@ func (s *server) subscriptionPage(c *gin.Context) {
 
 func (s *server) editSubscription(c *gin.Context) {
 
-	email := checkSession(c)
+	checkSession(c)
+
+	ad, _ := ExtractTokenMetadata(c)
+	email := ad.Email
 
 	topics, ok := c.Request.URL.Query()["topic"]
 
@@ -383,8 +392,7 @@ func main() {
 
 	router.GET("/", loginPage)
 	router.POST("/registration", s.registration)
-	router.POST("/registrationPage", registrationPage)
-	router.POST("/registrationError", registrationError)
+	router.GET("/registrationPage", registrationPage)
 	router.POST("/login", s.login)
 	router.GET("/logout", TokenAuthMiddleware(), logout)
 	router.GET("/notificationsPage", TokenAuthMiddleware(), notificationsPage)

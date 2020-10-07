@@ -9,10 +9,8 @@ import (
 	"github.com/go-redis/redis"
 	"github.com/twinj/uuid"
 	"golang.org/x/crypto/bcrypt"
-	"html/template"
 	"net/http"
 	"os"
-	"path/filepath"
 	"time"
 )
 
@@ -40,33 +38,33 @@ func initRedis() {
 }
 
 type TokenDetails struct {
-	AccessToken  string
-	RefreshToken string
-	AccessUuid   string
-	RefreshUuid  string
-	AtExpires    int64
-	RtExpires    int64
+	AccessToken string
+	AccessUuid  string
+	AtExpires   int64
 }
 
 func registrationPage(c *gin.Context) {
 
-	// Check if user is authenticated
-	if checkSession(c) == "" {
+	_, err := c.Request.Cookie("access_token")
 
-		data := Object{
-			Status: "not-logged",
-		}
+	if err == nil {
+		redirecter(c, "notifications.html", "logged", nil)
 
-		lp := filepath.Join("../templates", "layout.html")
-		fp := filepath.Join("../templates", "registration.html")
+	} else {
 
-		tmpl, _ := template.ParseFiles(lp, fp)
-		tmpl.ExecuteTemplate(c.Writer, "layout", data)
-
-		return
+		c.HTML(
+			// Set the HTTP status to 200 (OK)
+			http.StatusOK,
+			// Use the index.html template
+			"registration.html",
+			// Pass the data that the page uses (in this case, 'title')
+			gin.H{
+				"title":  "",
+				"status": "not-logged",
+			},
+		)
 	}
 
-	http.Redirect(c.Writer, c.Request, "/notificationsPage", 301)
 }
 
 func (s *server) registration(c *gin.Context) {
@@ -87,8 +85,17 @@ func (s *server) registration(c *gin.Context) {
 
 		if err != nil {
 
-			http.Error(c.Writer, "Server error, unable to create your account.", 500)
-			return
+			c.HTML(
+				// Set the HTTP status to 200 (OK)
+				http.StatusInternalServerError,
+				// Use the index.html template
+				"registration.html",
+				// Pass the data that the page uses (in this case, 'title')
+				gin.H{
+					"title":  "",
+					"status": "not-logged",
+				},
+			)
 		}
 
 		sqlStatement := `INSERT INTO users (email, username, password) VALUES ($1, $2, $3)`
@@ -99,43 +106,65 @@ func (s *server) registration(c *gin.Context) {
 			panic(err)
 		}
 
-		http.Redirect(c.Writer, c.Request, "/loginPage", 301)
+		c.Redirect(301, "/")
 		return
 
 	case err != nil:
 
-		http.Redirect(c.Writer, c.Request, "/registrationError", 500)
+		c.HTML(
+			// Set the HTTP status to 200 (OK) TODO
+			http.StatusInternalServerError,
+			// Use the index.html template
+			"registrationError.html",
+			// Pass the data that the page uses (in this case, 'title')
+			gin.H{
+				"title":  "",
+				"status": "not-logged",
+			},
+		)
+
 		return
 
 	default:
 
-		http.Redirect(c.Writer, c.Request, "/registrationError", 301)
+		c.HTML(
+			// Set the HTTP status to 200 (OK) TODO
+			http.StatusInternalServerError,
+			// Use the index.html template
+			"registrationError.html",
+			// Pass the data that the page uses (in this case, 'title')
+			gin.H{
+				"title":  "",
+				"status": "not-logged",
+			},
+		)
+
 		return
 	}
 }
 
-func registrationError(c *gin.Context) {
-
-	lp := filepath.Join("../templates", "layout.html")
-	fp := filepath.Join("../templates", "registrationError.html")
-
-	tmpl, _ := template.ParseFiles(lp, fp)
-	tmpl.ExecuteTemplate(c.Writer, "layout", nil)
-}
-
 func loginPage(c *gin.Context) {
 
-	c.HTML(
-		// Set the HTTP status to 200 (OK)
-		http.StatusOK,
-		// Use the index.html template
-		"login.html",
-		// Pass the data that the page uses (in this case, 'title')
-		gin.H{
-			"title":  "",
-			"status": "not-logged",
-		},
-	)
+	_, err := c.Request.Cookie("access_token")
+
+	if err == nil {
+		redirecter(c, "notifications.html", "logged", nil)
+
+	} else {
+
+		c.HTML(
+			// Set the HTTP status to 200 (OK)
+			http.StatusOK,
+			// Use the index.html template
+			"login.html",
+			// Pass the data that the page uses (in this case, 'title')
+			gin.H{
+				"title":  "",
+				"status": "not-logged",
+			},
+		)
+	}
+
 }
 
 func CreateToken(email string) (*TokenDetails, error) {
@@ -143,9 +172,6 @@ func CreateToken(email string) (*TokenDetails, error) {
 	td := &TokenDetails{}
 	td.AtExpires = time.Now().Add(time.Minute * 15).Unix()
 	td.AccessUuid = uuid.NewV4().String()
-
-	td.RtExpires = time.Now().Add(time.Hour * 24 * 7).Unix()
-	td.RefreshUuid = uuid.NewV4().String()
 
 	var err error
 	//Creating Access Token
@@ -162,24 +188,12 @@ func CreateToken(email string) (*TokenDetails, error) {
 		return nil, err
 	}
 
-	//Creating Refresh Token
-	os.Setenv("REFRESH_SECRET", "mcmvmkmsdnfsdmfdsjf") //this should be in an env file
-	rtClaims := jwt.MapClaims{}
-	rtClaims["refresh_uuid"] = td.RefreshUuid
-	rtClaims["email"] = email
-	rtClaims["exp"] = td.RtExpires
-	rt := jwt.NewWithClaims(jwt.SigningMethodHS256, rtClaims)
-	td.RefreshToken, err = rt.SignedString([]byte(os.Getenv("REFRESH_SECRET")))
-	if err != nil {
-		return nil, err
-	}
 	return td, nil
 }
 
 func CreateAuth(email string, td *TokenDetails) error {
 
 	at := time.Unix(td.AtExpires, 0) //converting Unix to UTC(to Time object)
-	rt := time.Unix(td.RtExpires, 0)
 	now := time.Now()
 
 	errAccess := client.Set(ctx, td.AccessUuid, email, at.Sub(now)).Err()
@@ -188,18 +202,12 @@ func CreateAuth(email string, td *TokenDetails) error {
 		return errAccess
 	}
 
-	errRefresh := client.Set(ctx, td.RefreshUuid, email, rt.Sub(now)).Err()
-
-	if errRefresh != nil {
-		return errRefresh
-	}
-
 	return nil
 }
 
-func VerifyToken(r *http.Request) (*jwt.Token, error) {
+func VerifyToken(c *gin.Context) (*jwt.Token, error) {
 
-	tokenString := ExtractToken(r)
+	tokenString := ExtractToken(c)
 
 	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
 
@@ -215,9 +223,9 @@ func VerifyToken(r *http.Request) (*jwt.Token, error) {
 	return token, nil
 }
 
-func TokenValid(r *http.Request) error {
+func TokenValid(c *gin.Context) error {
 
-	token, err := VerifyToken(r)
+	token, err := VerifyToken(c)
 	if err != nil {
 		return err
 	}
@@ -227,10 +235,24 @@ func TokenValid(r *http.Request) error {
 	return nil
 }
 
-func ExtractToken(r *http.Request) string {
+func ExtractToken(c *gin.Context) string {
 
-	accessToken, _ := r.Cookie("access_token")
-	//refreshToken, _ := r.Cookie("refresh_token")
+	accessToken, err := c.Request.Cookie("access_token")
+	if err != nil {
+
+		c.HTML(
+			// Set the HTTP status to 200 (OK)
+			http.StatusUnauthorized,
+			// Use the index.html template
+			"login.html",
+			// Pass the data that the page uses (in this case, 'title')
+			gin.H{
+				"status": "not-logged",
+			},
+		)
+		return ""
+
+	}
 
 	return accessToken.Value
 }
@@ -240,9 +262,9 @@ type AccessDetails struct {
 	Email      string
 }
 
-func ExtractTokenMetadata(r *http.Request) (*AccessDetails, error) {
+func ExtractTokenMetadata(c *gin.Context) (*AccessDetails, error) {
 
-	token, err := VerifyToken(r)
+	token, err := VerifyToken(c)
 
 	if err != nil {
 		return nil, err
@@ -269,15 +291,15 @@ func ExtractTokenMetadata(r *http.Request) (*AccessDetails, error) {
 	return nil, err
 }
 
-func FetchAuth(authD *AccessDetails) (string, error) {
+func FetchAuth(authD *AccessDetails) error {
 
-	email, err := client.Get(ctx, authD.AccessUuid).Result()
+	_, err := client.Get(ctx, authD.AccessUuid).Result()
 
 	if err != nil {
-		return "", err
+		return err
 	}
 
-	return email, nil
+	return nil
 }
 
 func DeleteAuth(givenUuid string) (int64, error) {
@@ -294,10 +316,10 @@ func DeleteAuth(givenUuid string) (int64, error) {
 func TokenAuthMiddleware() gin.HandlerFunc {
 
 	return func(c *gin.Context) {
-		err := TokenValid(c.Request)
+		err := TokenValid(c)
 
 		if err != nil {
-			c.JSON(http.StatusUnauthorized, err.Error())
+
 			c.Abort()
 			return
 		}
@@ -344,28 +366,14 @@ func (s *server) login(c *gin.Context) {
 		Expires: time.Now().Add(time.Minute * 15),
 	})
 
-	http.SetCookie(c.Writer, &http.Cookie{
-		Name:    "refresh_token",
-		Value:   ts.RefreshToken,
-		Expires: time.Now().Add(time.Hour * 24 * 7),
-	})
-
 	c.Redirect(301, "/notificationsPage")
 }
 
 func logout(c *gin.Context) {
 
-	fmt.Println("AAAAAA")
+	checkSession(c)
 
-	au, err := ExtractTokenMetadata(c.Request)
-
-	if err != nil {
-
-		c.JSON(http.StatusUnauthorized, "unauthorized")
-		return
-	}
-
-	fmt.Println("BBBBBB")
+	au, _ := ExtractTokenMetadata(c)
 
 	deleted, delErr := DeleteAuth(au.AccessUuid)
 
@@ -375,8 +383,6 @@ func logout(c *gin.Context) {
 		return
 	}
 
-	fmt.Println("CCCCC")
-
 	accessToken, _ := c.Request.Cookie("access_token")
 
 	http.SetCookie(c.Writer, &http.Cookie{
@@ -385,29 +391,57 @@ func logout(c *gin.Context) {
 		Expires: time.Now(),
 	})
 
-	c.Redirect(301, "/")
+	c.HTML(
+		http.StatusOK,
+		// Use the index.html template
+		"login.html",
+		// Pass the data that the page uses (in this case, 'title')
+		gin.H{
+			"status": "not-logged",
+		},
+	)
+
 }
 
-func checkSession(c *gin.Context) string {
+func checkSession(c *gin.Context) {
 
-	tokenAuth, err := ExtractTokenMetadata(c.Request)
-
-	if err != nil {
-		c.JSON(http.StatusUnauthorized, "unauthorized")
-		return ""
-	}
-
-	email, err := FetchAuth(tokenAuth)
+	tokenAuth, err := ExtractTokenMetadata(c)
 
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, "unauthorized")
-		return ""
+		c.HTML(
+			// Set the HTTP status to 200 (OK)
+			http.StatusUnauthorized,
+			// Use the index.html template
+			"login.html",
+			// Pass the data that the page uses (in this case, 'title')
+			gin.H{
+				"status": "not-logged",
+			},
+		)
+		return
 	}
 
-	return email
+	err = FetchAuth(tokenAuth)
+
+	if err != nil {
+		c.HTML(
+			// Set the HTTP status to 200 (OK)
+			http.StatusUnauthorized,
+			// Use the index.html template
+			"login.html",
+			// Pass the data that the page uses (in this case, 'title')
+			gin.H{
+				"status": "not-logged",
+			},
+		)
+		return
+	}
+
 }
 
 func redirecter(c *gin.Context, url string, status string, results interface{}) {
+
+	checkSession(c)
 
 	c.HTML(
 		// Set the HTTP status to 200 (OK)
