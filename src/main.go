@@ -161,6 +161,8 @@ func (s *server) notifications(c *gin.Context) {
 
 	checkSession(c)
 
+	fmt.Print()
+
 	ad, _ := ExtractTokenMetadata(c)
 	email := ad.Email
 
