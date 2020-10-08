@@ -2,6 +2,7 @@
 package main
 
 import (
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"github.com/gin-gonic/gin"
@@ -13,11 +14,6 @@ import (
 	"sync"
 	"time"
 )
-
-type Object struct {
-	Status string
-	Data   interface{}
-}
 
 type Topic struct {
 	Name string
@@ -34,49 +30,70 @@ type DataEvent struct {
 }
 
 type DataEventSlice []DataEvent
-type Subscribers []string
+type Topics []string
 
 type EventBus struct {
 	topicMessages map[string]DataEventSlice //key: topic - value: messages
-	subscribers   map[string]Subscribers    //key: topic - value: users
+	userTopics    map[string]Topics         //key: topic - value: users
 	rm            sync.RWMutex
 }
 
-func (eb *EventBus) topicSubscription(topic string, email string) {
+type Receivers struct {
+	dbServer server
+	eb       EventBus
+}
 
-	eb.rm.Lock()
+func (r *Receivers) topicSubscription(topic string, email string) {
 
-	if _, found := eb.subscribers[email]; !found {
+	r.eb.rm.Lock()
+
+	//user not subscribed to any topic yet
+	if _, found := r.eb.userTopics[email]; !found {
 
 		topics := []string{topic}
-		eb.subscribers[email] = topics
+		r.eb.userTopics[email] = topics
 
-	} else {
+	} else { //append new topic subscription
 
-		eb.subscribers[email] = append(eb.subscribers[email], topic)
+		r.eb.userTopics[email] = append(r.eb.userTopics[email], topic)
 	}
 
-	eb.rm.Unlock()
+	r.eb.rm.Unlock()
 }
 
-func (eb *EventBus) topicUnsubscription(email string) {
+func remove(s []string, i int) []string {
 
-	eb.rm.Lock()
-	delete(eb.subscribers, email)
-	eb.rm.Unlock()
+	s[i] = s[len(s)-1]
+	return s[:len(s)-1]
 }
 
-var eb = &EventBus{
-	topicMessages: map[string]DataEventSlice{},
-	subscribers:   map[string]Subscribers{},
+func (r *Receivers) topicUnsubscription(email string, topic string) {
+
+	r.eb.rm.Lock()
+
+	topicList := r.eb.userTopics[email]
+	var newList []string
+
+	for i := 0; i < len(topicList); i++ {
+
+		if topicList[i] == topic {
+
+			newList = remove(topicList, i)
+		}
+	}
+
+	delete(r.eb.userTopics, email)
+	r.eb.userTopics[email] = newList
+
+	r.eb.rm.Unlock()
 }
 
-func (eb *EventBus) publishTo(topic string, message string, radius int, lifeTime int, latitude string, longitude string) bool {
+func (r *Receivers) publishTo(topic string, message string, radius int, lifeTime int, latitude string, longitude string) bool {
 
 	startTime := time.Now().Nanosecond()
 	expirationTime := time.Now().Local().Add(time.Minute * time.Duration(lifeTime))
 
-	eb.rm.RLock()
+	r.eb.rm.RLock()
 
 	checked := false
 
@@ -87,9 +104,9 @@ func (eb *EventBus) publishTo(topic string, message string, radius int, lifeTime
 		dataEvent := DataEvent{Message: message, Topic: topic, Radius: radius, LifeTime: expirationTime,
 			Latitude: latitudeFloat, Longitude: longitudeFloat}
 
-		size := len(eb.topicMessages[topic])
-		eb.topicMessages[topic] = append(eb.topicMessages[topic], dataEvent)
-		size1 := len(eb.topicMessages[topic])
+		size := len(r.eb.topicMessages[topic])
+		r.eb.topicMessages[topic] = append(r.eb.topicMessages[topic], dataEvent)
+		size1 := len(r.eb.topicMessages[topic])
 
 		if size1 > size {
 
@@ -104,19 +121,19 @@ func (eb *EventBus) publishTo(topic string, message string, radius int, lifeTime
 		}
 	}
 
-	eb.rm.RUnlock()
+	r.eb.rm.RUnlock()
 
 	return true
 }
 
-func (eb *EventBus) deleteMessage(topic string) {
+func (r *Receivers) deleteMessage(topic string) {
 
-	for i := 0; i < len(eb.topicMessages[topic]); {
+	for i := 0; i < len(r.eb.topicMessages[topic]); {
 
-		if time.Now().After(eb.topicMessages[topic][i].LifeTime) {
+		if time.Now().After(r.eb.topicMessages[topic][i].LifeTime) {
 
-			eb.topicMessages[topic][i] = eb.topicMessages[topic][len(eb.topicMessages[topic])-1]
-			eb.topicMessages[topic] = eb.topicMessages[topic][:len(eb.topicMessages[topic])-1]
+			r.eb.topicMessages[topic][i] = r.eb.topicMessages[topic][len(r.eb.topicMessages[topic])-1]
+			r.eb.topicMessages[topic] = r.eb.topicMessages[topic][:len(r.eb.topicMessages[topic])-1]
 
 		} else {
 
@@ -125,13 +142,26 @@ func (eb *EventBus) deleteMessage(topic string) {
 	}
 }
 
-func (eb *EventBus) garbageCollection() {
+func (r *Receivers) garbageCollection() {
 
 	for {
 
-		for topic := range eb.topicMessages {
+		for topic := range r.eb.topicMessages {
 
-			go eb.deleteMessage(topic)
+			go func() {
+
+				r.deleteMessage(topic)
+
+				sqlStatement := `DELETE FROM messages WHERE topic = $1`
+
+				_, err := r.dbServer.db.Exec(sqlStatement, topic)
+
+				if err != nil {
+					panic(err)
+				}
+
+			}()
+
 		}
 
 		time.Sleep(time.Minute * time.Duration(1))
@@ -157,11 +187,9 @@ func notificationsPage(c *gin.Context) {
 	redirecter(c, "notifications.html", "logged", nil)
 }
 
-func (s *server) notifications(c *gin.Context) {
+func (r *Receivers) notifications(c *gin.Context) {
 
 	checkSession(c)
-
-	fmt.Print()
 
 	ad, _ := ExtractTokenMetadata(c)
 	email := ad.Email
@@ -176,7 +204,7 @@ func (s *server) notifications(c *gin.Context) {
 	sessionLongitude, _ := strconv.ParseFloat(longitudes[0], 64)
 	sessionRadius, _ := strconv.ParseInt(radius[0], 10, 64)
 
-	data, err := s.db.Query("SELECT topic FROM subscriptions "+
+	data, err := r.dbServer.db.Query("SELECT topic FROM subscriptions "+
 		"WHERE subscriber = $1", email)
 
 	if err != nil {
@@ -195,9 +223,9 @@ func (s *server) notifications(c *gin.Context) {
 
 	for i := 0; i < 5; i++ {
 
-		for _, item := range eb.subscribers[email] {
+		for _, topic := range r.eb.userTopics[email] {
 
-			for _, message := range eb.topicMessages[item] {
+			for _, message := range r.eb.topicMessages[topic] {
 
 				if checkDistance(sessionLatitude, message.Latitude, sessionLongitude, message.Longitude, int(sessionRadius), message.Radius) {
 
@@ -268,7 +296,7 @@ func (s *server) subscriptionPage(c *gin.Context) {
 	redirecter(c, "subscribe.html", "logged", results)
 }
 
-func (s *server) editSubscription(c *gin.Context) {
+func (r *Receivers) editSubscription(c *gin.Context) {
 
 	checkSession(c)
 
@@ -283,41 +311,36 @@ func (s *server) editSubscription(c *gin.Context) {
 	}
 
 	topic := topics[0]
-	data, err := s.db.Query("select topic from subscriptions where subscriber = $1 and topic = $2", email, topic)
+	err := r.dbServer.db.QueryRow("select topic from subscriptions where subscriber = $1 and topic = $2", email, topic).Scan()
 
-	if err != nil {
-		panic(err)
-	}
+	switch {
 
-	if data.Next() {
+	case err != sql.ErrNoRows:
 
 		sqlStatement := `DELETE FROM subscriptions WHERE subscriber = $1 AND topic = $2`
 
-		_, err := s.db.Exec(sqlStatement, email, topic)
+		r.topicUnsubscription(email, topic)
+		_, err := r.dbServer.db.Exec(sqlStatement, email, topic)
 
 		if err != nil {
-			fmt.Println("BBBBBB")
 			panic(err)
 		}
 
-		eb.topicUnsubscription(email)
-
-	} else {
+	case err == sql.ErrNoRows:
 
 		sqlStatement := `INSERT INTO subscriptions (subscriber, topic) VALUES ($1, $2)`
 
-		_, err := s.db.Exec(sqlStatement, email, topic)
+		r.topicSubscription(topic, email)
+		_, err := r.dbServer.db.Exec(sqlStatement, email, topic)
 
 		if err != nil {
-			fmt.Println("CCCCCC")
 			panic(err)
 		}
 
-		eb.topicSubscription(topic, email)
+	default:
 
+		panic(err)
 	}
-
-	//c.Redirect(301, "/subscriptionPage")
 }
 
 func publishPage(c *gin.Context) {
@@ -325,7 +348,7 @@ func publishPage(c *gin.Context) {
 	redirecter(c, "publish.html", "logged", nil)
 }
 
-func (s *server) publish(c *gin.Context) {
+func (r *Receivers) publish(c *gin.Context) {
 
 	checkSession(c)
 
@@ -343,35 +366,47 @@ func (s *server) publish(c *gin.Context) {
 	latitude := latitudes[0]
 	longitude := longitudes[0]
 
-	/*sqlStatement := `
-			INSERT INTO messages (payload, publisher,topic)
-			VALUES ($1, $2, $3)`
+	sqlStatement := `INSERT INTO messages (payload, topic, radius, latitude, longitude, lifetime) VALUES ($1, $2, $3, $4, $5, $6)`
 
-	_, err := s.db.Exec(sqlStatement, payload, publisher, topic)
-
-	if err != nil {
-		panic(err)
-	}*/
-
-	go eb.publishTo(topic, payload, radius, lifeTime, latitude, longitude)
-
-	//TODO 301
-	c.Redirect(301, "/publishPage")
-}
-
-func (s *server) initEB() {
-
-	data, err := s.db.Query("SELECT * FROM subscriptions ORDER BY topic")
+	_, err := r.dbServer.db.Exec(sqlStatement, payload, topic, radius, latitude, longitude, lifeTime)
 
 	if err != nil {
 		panic(err)
 	}
 
-	for data.Next() {
+	go r.publishTo(topic, payload, radius, lifeTime, latitude, longitude)
+
+	c.Redirect(301, "/publishPage")
+}
+
+func (r *Receivers) initEB() {
+
+	messages, err := r.dbServer.db.Query("SELECT * FROM messages")
+
+	if err != nil {
+		panic(err)
+	}
+
+	for messages.Next() {
+		var payload, topic, latitude, longitude string
+		var radius, lifetime, id int
+		messages.Scan(&payload, &topic, &id, &radius, &latitude, &longitude, &lifetime)
+		r.publishTo(topic, payload, radius, lifetime, latitude, longitude)
+
+	}
+
+	subscriptions, err := r.dbServer.db.Query("SELECT * FROM subscriptions ORDER BY topic")
+
+	if err != nil {
+		panic(err)
+	}
+
+	for subscriptions.Next() {
 		var subscriber, topic string
-		data.Scan(&subscriber, &topic)
-		eb.topicMessages[topic] = DataEventSlice{}
-		eb.topicSubscription(topic, subscriber)
+		subscriptions.Scan(&subscriber, &topic)
+
+		//r.eb.topicMessages[topic] = DataEventSlice{}
+		r.topicSubscription(topic, subscriber)
 	}
 
 	return
@@ -382,14 +417,22 @@ func main() {
 	initRedis()
 	s, db := initDB()
 	defer db.Close()
-	s.initEB()
-	go eb.garbageCollection()
 
-	//fs := http.FileServer(http.Dir("../static"))
-	//http.Handle("/static/", http.StripPrefix("/static/", fs))
+	var eb = &EventBus{
+		topicMessages: map[string]DataEventSlice{},
+		userTopics:    map[string]Topics{},
+	}
+
+	var r = &Receivers{
+		dbServer: *s,
+		eb:       *eb,
+	}
+
+	r.initEB()
+
+	go r.garbageCollection()
 
 	router.StaticFS("/static/", http.Dir("../static"))
-
 	router.LoadHTMLGlob("../templates/*")
 
 	router.GET("/", loginPage)
@@ -398,11 +441,11 @@ func main() {
 	router.POST("/login", s.login)
 	router.GET("/logout", TokenAuthMiddleware(), logout)
 	router.GET("/notificationsPage", TokenAuthMiddleware(), notificationsPage)
-	router.GET("/notifications", TokenAuthMiddleware(), s.notifications)
+	router.GET("/notifications", TokenAuthMiddleware(), r.notifications)
 	router.GET("/publishPage", TokenAuthMiddleware(), publishPage)
 	router.GET("/subscriptionPage", TokenAuthMiddleware(), s.subscriptionPage)
-	router.GET("/editSubscription", TokenAuthMiddleware(), s.editSubscription)
-	router.GET("/publish", TokenAuthMiddleware(), s.publish)
+	router.GET("/editSubscription", TokenAuthMiddleware(), r.editSubscription)
+	router.GET("/publish", TokenAuthMiddleware(), r.publish)
 
 	log.Println("Listening on :8080...")
 	err := router.Run(":8080")
