@@ -395,10 +395,10 @@ func (r *Receivers) initEB() {
 	}
 
 	for subscriptions.Next() {
+
 		var subscriber, topic string
 		subscriptions.Scan(&subscriber, &topic)
 
-		//r.eb.topicMessages[topic] = DataEventSlice{}
 		r.topicSubscription(topic, subscriber)
 	}
 

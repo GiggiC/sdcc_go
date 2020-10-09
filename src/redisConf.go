@@ -16,6 +16,7 @@ func initRedis() {
 	if len(dsn) == 0 {
 		dsn = "localhost:6379"
 	}
+
 	client = redis.NewClient(&redis.Options{
 		Addr: dsn,
 	})

@@ -87,7 +87,8 @@ func TokenValid(c *gin.Context) error {
 func ExtractToken(c *gin.Context) string {
 
 	accessToken, err := c.Request.Cookie("access_token")
-	if err != nil {
+
+	if err != nil || accessToken.Value == "" {
 
 		c.HTML(
 			// Set the HTTP status to 200 (OK)
@@ -99,8 +100,8 @@ func ExtractToken(c *gin.Context) string {
 				"status": "not-logged",
 			},
 		)
-		return ""
 
+		return ""
 	}
 
 	return accessToken.Value

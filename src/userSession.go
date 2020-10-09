@@ -10,10 +10,11 @@ import (
 
 func registrationPage(c *gin.Context) {
 
-	_, err := c.Request.Cookie("access_token")
+	token := ExtractToken(c)
 
-	if err == nil {
-		redirecter(c, "notifications.html", "logged", nil)
+	if token != "" {
+
+		c.Redirect(http.StatusMovedPermanently, "/notificationsPage")
 
 	} else {
 
@@ -115,7 +116,12 @@ type AccessDetails struct {
 
 func loginPage(c *gin.Context) {
 
-	checkSession(c)
+	token := ExtractToken(c)
+
+	if token != "" {
+
+		c.Redirect(http.StatusMovedPermanently, "/notificationsPage")
+	}
 }
 
 func (s *server) login(c *gin.Context) {
