@@ -1,47 +1,12 @@
 package main
 
 import (
-	"context"
 	"database/sql"
-	"fmt"
-	"github.com/dgrijalva/jwt-go"
 	"github.com/gin-gonic/gin"
-	"github.com/go-redis/redis"
-	"github.com/twinj/uuid"
 	"golang.org/x/crypto/bcrypt"
 	"net/http"
-	"os"
 	"time"
 )
-
-var (
-	router = gin.Default()
-)
-
-var client *redis.Client
-var ctx = context.Background()
-
-func initRedis() {
-	//Initializing redis
-	dsn := os.Getenv("REDIS_DSN")
-	if len(dsn) == 0 {
-		dsn = "localhost:6379"
-	}
-	client = redis.NewClient(&redis.Options{
-		Addr: dsn, //redis port
-	})
-
-	_, err := client.Ping(ctx).Result()
-	if err != nil {
-		panic(err)
-	}
-}
-
-type TokenDetails struct {
-	AccessToken string
-	AccessUuid  string
-	AtExpires   int64
-}
 
 func registrationPage(c *gin.Context) {
 
@@ -143,188 +108,14 @@ func (s *server) registration(c *gin.Context) {
 	}
 }
 
-func loginPage(c *gin.Context) {
-
-	_, err := c.Request.Cookie("access_token")
-
-	if err == nil {
-		redirecter(c, "notifications.html", "logged", nil)
-
-	} else {
-
-		c.HTML(
-			// Set the HTTP status to 200 (OK)
-			http.StatusOK,
-			// Use the index.html template
-			"login.html",
-			// Pass the data that the page uses (in this case, 'title')
-			gin.H{
-				"title":  "",
-				"status": "not-logged",
-			},
-		)
-	}
-
-}
-
-func CreateToken(email string) (*TokenDetails, error) {
-
-	td := &TokenDetails{}
-	td.AtExpires = time.Now().Add(time.Minute * 15).Unix()
-	td.AccessUuid = uuid.NewV4().String()
-
-	var err error
-	//Creating Access Token
-	os.Setenv("ACCESS_SECRET", "jdnfksdmfksd") //this should be in an env file
-	atClaims := jwt.MapClaims{}
-	atClaims["authorized"] = true
-	atClaims["access_uuid"] = td.AccessUuid
-	atClaims["email"] = email
-	atClaims["exp"] = td.AtExpires
-	at := jwt.NewWithClaims(jwt.SigningMethodHS256, atClaims)
-	td.AccessToken, err = at.SignedString([]byte(os.Getenv("ACCESS_SECRET")))
-
-	if err != nil {
-		return nil, err
-	}
-
-	return td, nil
-}
-
-func CreateAuth(email string, td *TokenDetails) error {
-
-	at := time.Unix(td.AtExpires, 0) //converting Unix to UTC(to Time object)
-	now := time.Now()
-
-	errAccess := client.Set(ctx, td.AccessUuid, email, at.Sub(now)).Err()
-
-	if errAccess != nil {
-		return errAccess
-	}
-
-	return nil
-}
-
-func VerifyToken(c *gin.Context) (*jwt.Token, error) {
-
-	tokenString := ExtractToken(c)
-
-	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
-
-		//Make sure that the token method conform to "SigningMethodHMAC"
-		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
-		}
-		return []byte(os.Getenv("ACCESS_SECRET")), nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	return token, nil
-}
-
-func TokenValid(c *gin.Context) error {
-
-	token, err := VerifyToken(c)
-	if err != nil {
-		return err
-	}
-	if _, ok := token.Claims.(jwt.Claims); !ok && !token.Valid {
-		return err
-	}
-	return nil
-}
-
-func ExtractToken(c *gin.Context) string {
-
-	accessToken, err := c.Request.Cookie("access_token")
-	if err != nil {
-
-		c.HTML(
-			// Set the HTTP status to 200 (OK)
-			http.StatusUnauthorized,
-			// Use the index.html template
-			"login.html",
-			// Pass the data that the page uses (in this case, 'title')
-			gin.H{
-				"status": "not-logged",
-			},
-		)
-		return ""
-
-	}
-
-	return accessToken.Value
-}
-
 type AccessDetails struct {
 	AccessUuid string
 	Email      string
 }
 
-func ExtractTokenMetadata(c *gin.Context) (*AccessDetails, error) {
+func loginPage(c *gin.Context) {
 
-	token, err := VerifyToken(c)
-
-	if err != nil {
-		return nil, err
-	}
-
-	claims, ok := token.Claims.(jwt.MapClaims)
-
-	if ok && token.Valid {
-
-		accessUuid, ok := claims["access_uuid"].(string)
-
-		if !ok {
-			return nil, err
-		}
-
-		email := fmt.Sprint(claims["email"])
-
-		return &AccessDetails{
-			AccessUuid: accessUuid,
-			Email:      email,
-		}, nil
-	}
-
-	return nil, err
-}
-
-func FetchAuth(authD *AccessDetails) error {
-
-	_, err := client.Get(ctx, authD.AccessUuid).Result()
-
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func DeleteAuth(givenUuid string) (int64, error) {
-
-	deleted, err := client.Del(ctx, givenUuid).Result()
-
-	if err != nil {
-		return 0, err
-	}
-
-	return deleted, nil
-}
-
-func TokenAuthMiddleware() gin.HandlerFunc {
-
-	return func(c *gin.Context) {
-		err := TokenValid(c)
-
-		if err != nil {
-
-			c.Abort()
-			return
-		}
-		c.Next()
-	}
+	checkSession(c)
 }
 
 func (s *server) login(c *gin.Context) {
@@ -383,11 +174,9 @@ func logout(c *gin.Context) {
 		return
 	}
 
-	accessToken, _ := c.Request.Cookie("access_token")
-
 	http.SetCookie(c.Writer, &http.Cookie{
 		Name:    "access_token",
-		Value:   accessToken.Value,
+		Value:   "",
 		Expires: time.Now(),
 	})
 

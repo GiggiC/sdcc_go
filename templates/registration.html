@@ -1,54 +1,48 @@
-<!--index.html-->
-
-<!--Embed the header.html template at this location-->
 {{ template "header.html" .}}
 
-    <main role="main" class="col-lg-12 px-md-4">
+<main role="main" class="col-lg-12 px-md-4">
 
-        <br>
-        <div class="container">
+    <br>
+    <div class="container">
 
-            <div class="row justify-content-center">
-                <div class="col-md-6">
-                    <div class="card">
+        <div class="row justify-content-center">
+            <div class="col-md-6">
+                <div class="card">
 
-                        <header class="card-header">
-                            <a href="/loginPage" class="float-right btn btn-outline-primary mt-1">Log in</a>
-                            <h4 class="card-title mt-2">Sign up</h4>
-                        </header>
+                    <header class="card-header">
+                        <a href="/loginPage" class="float-right btn btn-outline-primary mt-1">Log in</a>
+                        <h4 class="card-title mt-2">Sign up</h4>
+                    </header>
 
-                        <article class="card-body">
+                    <article class="card-body">
 
-                            <form method="POST" action="/registration">
+                        <form method="POST" action="/registration">
 
-                                <div class="form-group">
-                                    <label for="email">Email address</label>
-                                    <input type="email" class="form-control" placeholder="" name="email" id="email">
-                                </div>
+                            <div class="form-group">
+                                <label for="email">Email address</label>
+                                <input type="email" class="form-control" placeholder="" name="email" id="email">
+                            </div>
 
-                                <div class="form-group">
-                                    <label for="password">Create password</label>
-                                    <input class="form-control" type="password" name="password" id="password" minlength="6">
-                                </div>
+                            <div class="form-group">
+                                <label for="password">Create password</label>
+                                <input class="form-control" type="password" name="password" id="password" minlength="6">
+                            </div>
 
-                                <div class="form-group">
-                                    <button class="btn btn-lg btn-primary btn-block" type="submit">Sign Up</button>
-                                </div>
-                            </form>
+                            <div class="form-group">
+                                <button class="btn btn-lg btn-primary btn-block" type="submit">Sign Up</button>
+                            </div>
+                        </form>
 
-                        </article>
+                    </article>
 
-                        <div class="border-top card-body text-center">Have an account? <a href="/loginPage">Log In</a>
-                        </div>
-
+                    <div class="border-top card-body text-center">Have an account? <a href="/loginPage">Log In</a>
                     </div>
+
                 </div>
             </div>
         </div>
+    </div>
 
-    </main>
+</main>
 
-    <!--index.html-->
-
-    <!--Embed the header.html template at this location-->
-    {{ template "footer.html" .}}
+{{ template "footer.html" .}}

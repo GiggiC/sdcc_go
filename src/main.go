@@ -30,6 +30,7 @@ type DataEvent struct {
 }
 
 type DataEventSlice []DataEvent
+
 type Topics []string
 
 type EventBus struct {
@@ -42,6 +43,8 @@ type Receivers struct {
 	dbServer server
 	eb       EventBus
 }
+
+var router = gin.Default()
 
 func (r *Receivers) topicSubscription(topic string, email string) {
 
