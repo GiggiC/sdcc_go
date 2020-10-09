@@ -49,10 +49,13 @@
                 const longitude = position.coords.longitude;
 
                 $.ajax({
-
+                    type: "POST",
                     url: "/notifications",
-                    data: {latitude: latitude, longitude: longitude, radius: slider.value}, //If the request needs any data
-
+                    data:  JSON.stringify({
+                            latitude: latitude,
+                            longitude: longitude,
+                            radius: slider.value}
+                    ), //If the request needs any data
                     success: function (result) {
 
                         if (result != null) {

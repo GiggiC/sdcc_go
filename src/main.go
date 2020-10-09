@@ -21,12 +21,12 @@ type Topic struct {
 }
 
 type DataEvent struct {
-	Message   string    `json:"Message"`
-	Topic     string    `json:"Topic"`
-	Radius    int       `json:"Radius"`
-	LifeTime  time.Time `json:"LifeTime"`
-	Latitude  float64   `json:"Latitude"`
-	Longitude float64   `json:"Longitude"`
+	Message   string  `json:"Message"`
+	Topic     string  `json:"Topic"`
+	Radius    int     `json:"Radius,string"`
+	LifeTime  int     `json:"LifeTime,string"`
+	Latitude  float64 `json:"Latitude"`
+	Longitude float64 `json:"Longitude"`
 }
 
 type DataEventSlice []DataEvent
@@ -91,7 +91,6 @@ func (r *Receivers) topicUnsubscription(email string, topic string) {
 func (r *Receivers) publishTo(topic string, message string, radius int, lifeTime int, latitude string, longitude string) bool {
 
 	startTime := time.Now().Nanosecond()
-	expirationTime := time.Now().Local().Add(time.Minute * time.Duration(lifeTime))
 
 	r.eb.rm.RLock()
 
@@ -101,7 +100,7 @@ func (r *Receivers) publishTo(topic string, message string, radius int, lifeTime
 
 		latitudeFloat, _ := strconv.ParseFloat(latitude, 64)
 		longitudeFloat, _ := strconv.ParseFloat(longitude, 64)
-		dataEvent := DataEvent{Message: message, Topic: topic, Radius: radius, LifeTime: expirationTime,
+		dataEvent := DataEvent{Message: message, Topic: topic, Radius: radius, LifeTime: lifeTime,
 			Latitude: latitudeFloat, Longitude: longitudeFloat}
 
 		size := len(r.eb.topicMessages[topic])
@@ -130,7 +129,9 @@ func (r *Receivers) deleteMessage(topic string) {
 
 	for i := 0; i < len(r.eb.topicMessages[topic]); {
 
-		if time.Now().After(r.eb.topicMessages[topic][i].LifeTime) {
+		expirationTime := time.Now().Local().Add(time.Minute * time.Duration(r.eb.topicMessages[topic][i].LifeTime))
+
+		if time.Now().After(expirationTime) {
 
 			r.eb.topicMessages[topic][i] = r.eb.topicMessages[topic][len(r.eb.topicMessages[topic])-1]
 			r.eb.topicMessages[topic] = r.eb.topicMessages[topic][:len(r.eb.topicMessages[topic])-1]
@@ -196,13 +197,12 @@ func (r *Receivers) notifications(c *gin.Context) {
 
 	startTime := time.Now().Nanosecond()
 
-	latitudes, _ := c.Request.URL.Query()["latitude"]
-	longitudes, _ := c.Request.URL.Query()["longitude"]
-	radius, _ := c.Request.URL.Query()["radius"]
+	var d DataEvent
+	err := json.NewDecoder(c.Request.Body).Decode(&d)
 
-	sessionLatitude, _ := strconv.ParseFloat(latitudes[0], 64)
-	sessionLongitude, _ := strconv.ParseFloat(longitudes[0], 64)
-	sessionRadius, _ := strconv.ParseInt(radius[0], 10, 64)
+	if err != nil {
+		panic(err)
+	}
 
 	data, err := r.dbServer.db.Query("SELECT topic FROM subscriptions "+
 		"WHERE subscriber = $1", email)
@@ -227,7 +227,7 @@ func (r *Receivers) notifications(c *gin.Context) {
 
 			for _, message := range r.eb.topicMessages[topic] {
 
-				if checkDistance(sessionLatitude, message.Latitude, sessionLongitude, message.Longitude, int(sessionRadius), message.Radius) {
+				if checkDistance(d.Latitude, message.Latitude, d.Longitude, message.Longitude, d.Radius, message.Radius) {
 
 					notifications = append(notifications, message)
 				}
@@ -303,15 +303,14 @@ func (r *Receivers) editSubscription(c *gin.Context) {
 	ad, _ := ExtractTokenMetadata(c)
 	email := ad.Email
 
-	topics, ok := c.Request.URL.Query()["topic"]
+	var d DataEvent
+	err := json.NewDecoder(c.Request.Body).Decode(&d)
 
-	if !ok || len(topics[0]) < 1 {
-		log.Println("Url Param 'session' is missing")
-		return
+	if err != nil {
+		panic(err)
 	}
 
-	topic := topics[0]
-	err := r.dbServer.db.QueryRow("select topic from subscriptions where subscriber = $1 and topic = $2", email, topic).Scan()
+	err = r.dbServer.db.QueryRow("select topic from subscriptions where subscriber = $1 and topic = $2", email, d.Topic).Scan()
 
 	switch {
 
@@ -319,8 +318,8 @@ func (r *Receivers) editSubscription(c *gin.Context) {
 
 		sqlStatement := `DELETE FROM subscriptions WHERE subscriber = $1 AND topic = $2`
 
-		r.topicUnsubscription(email, topic)
-		_, err := r.dbServer.db.Exec(sqlStatement, email, topic)
+		r.topicUnsubscription(email, d.Topic)
+		_, err := r.dbServer.db.Exec(sqlStatement, email, d.Topic)
 
 		if err != nil {
 			panic(err)
@@ -330,8 +329,8 @@ func (r *Receivers) editSubscription(c *gin.Context) {
 
 		sqlStatement := `INSERT INTO subscriptions (subscriber, topic) VALUES ($1, $2)`
 
-		r.topicSubscription(topic, email)
-		_, err := r.dbServer.db.Exec(sqlStatement, email, topic)
+		r.topicSubscription(d.Topic, email)
+		_, err := r.dbServer.db.Exec(sqlStatement, email, d.Topic)
 
 		if err != nil {
 			panic(err)
@@ -352,31 +351,22 @@ func (r *Receivers) publish(c *gin.Context) {
 
 	checkSession(c)
 
-	payloads, _ := c.Request.URL.Query()["payload"]
-	topics, _ := c.Request.URL.Query()["topic"]
-	radiuss, _ := c.Request.URL.Query()["radius"]
-	lifeTimes, _ := c.Request.URL.Query()["lifeTime"]
-	latitudes, _ := c.Request.URL.Query()["latitude"]
-	longitudes, _ := c.Request.URL.Query()["longitude"]
-
-	payload := payloads[0]
-	topic := topics[0]
-	radius, _ := strconv.Atoi(radiuss[0])
-	lifeTime, _ := strconv.Atoi(lifeTimes[0])
-	latitude := latitudes[0]
-	longitude := longitudes[0]
-
-	sqlStatement := `INSERT INTO messages (payload, topic, radius, latitude, longitude, lifetime) VALUES ($1, $2, $3, $4, $5, $6)`
-
-	_, err := r.dbServer.db.Exec(sqlStatement, payload, topic, radius, latitude, longitude, lifeTime)
+	var d DataEvent
+	err := json.NewDecoder(c.Request.Body).Decode(&d)
 
 	if err != nil {
 		panic(err)
 	}
 
-	go r.publishTo(topic, payload, radius, lifeTime, latitude, longitude)
+	sqlStatement := `INSERT INTO messages (payload, topic, radius, latitude, longitude, lifetime) VALUES ($1, $2, $3, $4, $5, $6)`
 
-	c.Redirect(301, "/publishPage")
+	_, err = r.dbServer.db.Exec(sqlStatement, d.Message, d.Topic, d.Radius, d.Latitude, d.Longitude, d.LifeTime)
+
+	if err != nil {
+		panic(err)
+	}
+
+	go r.publishTo(d.Topic, d.Message, d.Radius, d.LifeTime, fmt.Sprintf("%f", d.Latitude), fmt.Sprintf("%f", d.Longitude))
 }
 
 func (r *Receivers) initEB() {
@@ -430,22 +420,23 @@ func main() {
 
 	r.initEB()
 
-	go r.garbageCollection()
+	// go r.garbageCollection()
 
 	router.StaticFS("/static/", http.Dir("../static"))
 	router.LoadHTMLGlob("../templates/*")
 
 	router.GET("/", loginPage)
-	router.POST("/registration", s.registration)
 	router.GET("/registrationPage", registrationPage)
-	router.POST("/login", s.login)
 	router.GET("/logout", TokenAuthMiddleware(), logout)
-	router.GET("/notificationsPage", TokenAuthMiddleware(), notificationsPage)
-	router.GET("/notifications", TokenAuthMiddleware(), r.notifications)
 	router.GET("/publishPage", TokenAuthMiddleware(), publishPage)
 	router.GET("/subscriptionPage", TokenAuthMiddleware(), s.subscriptionPage)
-	router.GET("/editSubscription", TokenAuthMiddleware(), r.editSubscription)
-	router.GET("/publish", TokenAuthMiddleware(), r.publish)
+	router.GET("/notificationsPage", TokenAuthMiddleware(), notificationsPage)
+
+	router.POST("/login", s.login)
+	router.POST("/registration", s.registration)
+	router.POST("/publish", TokenAuthMiddleware(), r.publish)
+	router.POST("/editSubscription", TokenAuthMiddleware(), r.editSubscription)
+	router.POST("/notifications", TokenAuthMiddleware(), r.notifications)
 
 	log.Println("Listening on :8080...")
 	err := router.Run(":8080")

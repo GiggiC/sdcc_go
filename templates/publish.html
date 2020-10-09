@@ -91,11 +91,12 @@
         const longitude = position.coords.longitude;
 
         $.ajax({
+            type: "POST",
             url: "/publish",
-            data: {
-                payload: payload, topic: topic, radius: radius, lifeTime: lifeTime,
-                latitude: latitude, longitude: longitude
-            }, //If the request needs any data
+            data: JSON.stringify({
+                Message: payload, Topic: topic, Radius: radius, LifeTime: lifeTime,
+                Latitude: latitude, Longitude: longitude
+            }), //If the request needs any data
             success: function () {
                 window.location.href = '/publishPage'
             }

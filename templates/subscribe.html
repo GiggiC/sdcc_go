@@ -45,8 +45,9 @@
         function submitSubscription(topic, flag) {
 
             $.ajax({
+                type: "POST",
                 url: "/editSubscription",
-                data: {topic: topic}, //If the request needs any data
+                data: JSON.stringify({topic: topic}), //If the request needs any data
             })
         }
     </script>
