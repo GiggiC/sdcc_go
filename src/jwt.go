@@ -22,14 +22,18 @@ func CreateToken(email string) (*TokenDetails, error) {
 	td.AtExpires = time.Now().Add(time.Minute * 15).Unix()
 	td.AccessUuid = uuid.NewV4().String()
 
-	var err error
-	//Creating Access Token
-	os.Setenv("ACCESS_SECRET", "jdnfksdmfksd") //this should be in an env file
+	err := os.Setenv("ACCESS_SECRET", "jdnfksdmfksd")
+
+	if err != nil {
+		panic(err)
+	}
+
 	atClaims := jwt.MapClaims{}
 	atClaims["authorized"] = true
 	atClaims["access_uuid"] = td.AccessUuid
 	atClaims["email"] = email
 	atClaims["exp"] = td.AtExpires
+
 	at := jwt.NewWithClaims(jwt.SigningMethodHS256, atClaims)
 	td.AccessToken, err = at.SignedString([]byte(os.Getenv("ACCESS_SECRET")))
 
@@ -48,6 +52,7 @@ func CreateAuth(email string, td *TokenDetails) error {
 	errAccess := client.Set(ctx, td.AccessUuid, email, at.Sub(now)).Err()
 
 	if errAccess != nil {
+
 		return errAccess
 	}
 
@@ -62,25 +67,35 @@ func VerifyToken(c *gin.Context) (*jwt.Token, error) {
 
 		//Make sure that the token method conform to "SigningMethodHMAC"
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+
 			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 		}
+
 		return []byte(os.Getenv("ACCESS_SECRET")), nil
 	})
+
 	if err != nil {
+
 		return nil, err
 	}
+
 	return token, nil
 }
 
 func TokenValid(c *gin.Context) error {
 
 	token, err := VerifyToken(c)
+
 	if err != nil {
+
 		return err
 	}
+
 	if _, ok := token.Claims.(jwt.Claims); !ok && !token.Valid {
+
 		return err
 	}
+
 	return nil
 }
 
@@ -90,17 +105,7 @@ func ExtractToken(c *gin.Context) string {
 
 	if err != nil || accessToken.Value == "" {
 
-		c.HTML(
-			// Set the HTTP status to 200 (OK)
-			http.StatusUnauthorized,
-			// Use the index.html template
-			"login.html",
-			// Pass the data that the page uses (in this case, 'title')
-			gin.H{
-				"status": "not-logged",
-			},
-		)
-
+		redirecter(c, "login.html", "not-logged", nil, false, http.StatusUnauthorized, "")
 		return ""
 	}
 
@@ -112,6 +117,7 @@ func ExtractTokenMetadata(c *gin.Context) (*AccessDetails, error) {
 	token, err := VerifyToken(c)
 
 	if err != nil {
+
 		return nil, err
 	}
 
@@ -165,9 +171,11 @@ func TokenAuthMiddleware() gin.HandlerFunc {
 
 		if err != nil {
 
+			redirecter(c, "login.html", "not-logged", nil, false, http.StatusUnauthorized, "")
 			c.Abort()
 			return
 		}
+
 		c.Next()
 	}
 }

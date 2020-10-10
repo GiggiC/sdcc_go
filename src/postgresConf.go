@@ -9,8 +9,6 @@ type server struct {
 	db *sql.DB
 }
 
-var s server
-
 const (
 	host     = "localhost"
 	port     = 5432

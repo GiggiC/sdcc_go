@@ -188,7 +188,7 @@ func checkDistance(x1 float64, x2 float64, y1 float64, y2 float64, r1 int, r2 in
 
 func notificationsPage(c *gin.Context) {
 
-	redirecter(c, "notifications.html", "logged", nil)
+	redirecter(c, "notifications.html", "logged", nil, true, http.StatusOK, "")
 }
 
 func (r *Receivers) notifications(c *gin.Context) {
@@ -296,7 +296,7 @@ func (s *server) subscriptionPage(c *gin.Context) {
 		results = append(results, tRes)
 	}
 
-	redirecter(c, "subscribe.html", "logged", results)
+	redirecter(c, "subscribe.html", "logged", results, true, http.StatusOK, "")
 }
 
 func (r *Receivers) editSubscription(c *gin.Context) {
@@ -347,7 +347,7 @@ func (r *Receivers) editSubscription(c *gin.Context) {
 
 func publishPage(c *gin.Context) {
 
-	redirecter(c, "publish.html", "logged", nil)
+	redirecter(c, "publish.html", "logged", nil, true, http.StatusOK, "")
 }
 
 func (r *Receivers) publish(c *gin.Context) {

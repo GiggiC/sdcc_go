@@ -8,29 +8,23 @@ import (
 	"time"
 )
 
+type AccessDetails struct {
+	AccessUuid string
+	Email      string
+}
+
 func registrationPage(c *gin.Context) {
 
-	token := ExtractToken(c)
+	accessToken, err := c.Request.Cookie("access_token")
 
-	if token != "" {
+	if err != nil || accessToken.Value == "" {
 
-		c.Redirect(http.StatusMovedPermanently, "/notificationsPage")
+		redirecter(c, "registration.html", "not-logged", nil, false, http.StatusOK, "")
 
 	} else {
 
-		c.HTML(
-			// Set the HTTP status to 200 (OK)
-			http.StatusOK,
-			// Use the index.html template
-			"registration.html",
-			// Pass the data that the page uses (in this case, 'title')
-			gin.H{
-				"title":  "",
-				"status": "not-logged",
-			},
-		)
+		redirecter(c, "notifications.html", "logged", nil, true, http.StatusOK, "")
 	}
-
 }
 
 func (s *server) registration(c *gin.Context) {
@@ -51,17 +45,7 @@ func (s *server) registration(c *gin.Context) {
 
 		if err != nil {
 
-			c.HTML(
-				// Set the HTTP status to 200 (OK)
-				http.StatusInternalServerError,
-				// Use the index.html template
-				"registration.html",
-				// Pass the data that the page uses (in this case, 'title')
-				gin.H{
-					"title":  "",
-					"status": "not-logged",
-				},
-			)
+			redirecter(c, "registration.html", "not-logged", nil, false, http.StatusInternalServerError, "")
 		}
 
 		sqlStatement := `INSERT INTO users (email, username, password) VALUES ($1, $2, $3)`
@@ -72,55 +56,28 @@ func (s *server) registration(c *gin.Context) {
 			panic(err)
 		}
 
-		c.Redirect(301, "/")
+		redirecter(c, "registration.html", "not-logged", nil, false, http.StatusInternalServerError, "")
 		return
 
 	case err != nil:
 
-		c.HTML(
-			// Set the HTTP status to 200 (OK) TODO
-			http.StatusInternalServerError,
-			// Use the index.html template
-			"registrationError.html",
-			// Pass the data that the page uses (in this case, 'title')
-			gin.H{
-				"title":  "",
-				"status": "not-logged",
-			},
-		)
-
+		redirecter(c, "registrationError.html", "not-logged", nil, false, http.StatusInternalServerError, "")
 		return
 
 	default:
 
-		c.HTML(
-			// Set the HTTP status to 200 (OK) TODO
-			http.StatusInternalServerError,
-			// Use the index.html template
-			"registrationError.html",
-			// Pass the data that the page uses (in this case, 'title')
-			gin.H{
-				"title":  "",
-				"status": "not-logged",
-			},
-		)
-
+		redirecter(c, "registrationError.html", "not-logged", nil, false, http.StatusInternalServerError, "") //TODO general error
 		return
 	}
 }
 
-type AccessDetails struct {
-	AccessUuid string
-	Email      string
-}
-
 func loginPage(c *gin.Context) {
 
-	token := ExtractToken(c)
+	err := TokenValid(c)
 
-	if token != "" {
+	if err == nil {
 
-		c.Redirect(http.StatusMovedPermanently, "/notificationsPage")
+		redirecter(c, "notifications.html", "logged", nil, true, http.StatusOK, "")
 	}
 }
 
@@ -135,26 +92,32 @@ func (s *server) login(c *gin.Context) {
 	err := s.db.QueryRow("SELECT email, password FROM users WHERE email=$1", email).Scan(&databaseEmail, &databasePassword)
 
 	if err != nil {
-		//res.WriteHeader(http.StatusUnauthorized) TODO
-		http.Redirect(c.Writer, c.Request, "/login", 301)
+
+		redirecter(c, "login.html", "not-logged", nil, false, http.StatusUnauthorized, "")
 		return
 	}
 
 	err = bcrypt.CompareHashAndPassword([]byte(databasePassword), []byte(password))
+
 	if err != nil {
-		//res.WriteHeader(http.StatusUnauthorized) TODO
-		http.Redirect(c.Writer, c.Request, "/login", 301)
+
+		redirecter(c, "login.html", "not-logged", nil, false, http.StatusUnauthorized, "")
 		return
 	}
 
 	ts, err := CreateToken(email)
+
 	if err != nil {
-		c.JSON(http.StatusUnprocessableEntity, err.Error())
+
+		redirecter(c, "login.html", "not-logged", nil, false, http.StatusUnprocessableEntity, "")
 		return
 	}
+
 	saveErr := CreateAuth(email, ts)
+
 	if saveErr != nil {
-		c.JSON(http.StatusUnprocessableEntity, saveErr.Error())
+		redirecter(c, "login.html", "not-logged", nil, false, http.StatusUnprocessableEntity, "")
+		return
 	}
 
 	http.SetCookie(c.Writer, &http.Cookie{
@@ -163,7 +126,8 @@ func (s *server) login(c *gin.Context) {
 		Expires: time.Now().Add(time.Minute * 15),
 	})
 
-	c.Redirect(301, "/notificationsPage")
+	redirecter(c, "notifications.html", "logged", nil, false, http.StatusOK, "")
+
 }
 
 func logout(c *gin.Context) {
@@ -171,12 +135,11 @@ func logout(c *gin.Context) {
 	checkSession(c)
 
 	au, _ := ExtractTokenMetadata(c)
-
 	deleted, delErr := DeleteAuth(au.AccessUuid)
 
 	if delErr != nil || deleted == 0 { //if any goes wrong
 
-		c.JSON(http.StatusUnauthorized, "unauthorized")
+		redirecter(c, "login.html", "not-logged", nil, false, http.StatusUnauthorized, "") //TODO error
 		return
 	}
 
@@ -186,66 +149,32 @@ func logout(c *gin.Context) {
 		Expires: time.Now(),
 	})
 
-	c.HTML(
-		http.StatusOK,
-		// Use the index.html template
-		"login.html",
-		// Pass the data that the page uses (in this case, 'title')
-		gin.H{
-			"status": "not-logged",
-		},
-	)
-
+	redirecter(c, "login.html", "not-logged", nil, false, http.StatusOK, "")
 }
 
 func checkSession(c *gin.Context) {
 
-	tokenAuth, err := ExtractTokenMetadata(c)
+	tokenAuth, exErr := ExtractTokenMetadata(c)
+	fErr := FetchAuth(tokenAuth)
 
-	if err != nil {
-		c.HTML(
-			// Set the HTTP status to 200 (OK)
-			http.StatusUnauthorized,
-			// Use the index.html template
-			"login.html",
-			// Pass the data that the page uses (in this case, 'title')
-			gin.H{
-				"status": "not-logged",
-			},
-		)
-		return
+	if exErr != nil || fErr != nil {
+
+		redirecter(c, "login.html", "not-logged", nil, false, http.StatusUnauthorized, "")
+		c.Abort()
 	}
-
-	err = FetchAuth(tokenAuth)
-
-	if err != nil {
-		c.HTML(
-			// Set the HTTP status to 200 (OK)
-			http.StatusUnauthorized,
-			// Use the index.html template
-			"login.html",
-			// Pass the data that the page uses (in this case, 'title')
-			gin.H{
-				"status": "not-logged",
-			},
-		)
-		return
-	}
-
 }
 
-func redirecter(c *gin.Context, url string, status string, results interface{}) {
+func redirecter(c *gin.Context, url string, status string, results interface{}, check bool, code int, title string) {
 
-	checkSession(c)
+	if check {
+		checkSession(c)
+	}
 
 	c.HTML(
-		// Set the HTTP status to 200 (OK)
-		http.StatusOK,
-		// Use the index.html template
+		code,
 		url,
-		// Pass the data that the page uses (in this case, 'title')
 		gin.H{
-			"title":   "",
+			"title":   title,
 			"status":  status,
 			"results": results,
 		},
