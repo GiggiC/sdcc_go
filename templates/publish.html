@@ -13,8 +13,7 @@
             <div class="row">
                 <div class="col-md-6 mb-3">
                     <label for="payload">Message</label>
-                    <input type="text" class="form-control" id="payload" placeholder="Message" value=""
-                           required>
+                    <input type="text" class="form-control" id="payload" placeholder="Message" value="" required>
                     <div class="invalid-feedback">
                         Valid Message is required.
                     </div>
@@ -23,10 +22,9 @@
                 <div class="col-md-6 mb-3">
                     <label for="topic">Topic</label>
                     <select class="custom-select d-block w-100" id="topic" required>
-                        <option value="Topic 1">Topic 1</option>
-                        <option value="Topic 2">Topic 2</option>
-                        <option value="Topic 3">Topic 3</option>
-                        <option value="Topic 4">Topic 4</option>
+                        {{range .results}}
+                            <option value="{{.}}">{{.}}</option>
+                        {{end}}
                     </select>
                     <div class="invalid-feedback">
                         Please select a valid Topic.
@@ -38,8 +36,7 @@
 
                 <div class="col-md-6 mb-3">
                     <label for="radius">Radius (Km)</label>
-                    <input type="number" class="form-control" id="radius" placeholder="Radius" value=""
-                           required>
+                    <input type="number" class="form-control" id="radius" placeholder="Radius" value="" required>
                     <div class="invalid-feedback">
                         Valid radius is required.
                     </div>
@@ -47,8 +44,7 @@
 
                 <div class="col-md-6 mb-3">
                     <label for="lifeTime">Life Time (Minutes)</label>
-                    <input type="number" class="form-control" id="lifeTime" placeholder="Life Time" value=""
-                           required>
+                    <input type="number" class="form-control" id="lifeTime" placeholder="Life Time" value="" required>
                     <div class="invalid-feedback">
                         Valid Life Time is required.
                     </div>
@@ -93,14 +89,15 @@
                 Latitude: latitude, Longitude: longitude
             }), //If the request needs any data
             success: function () {
+                alert("Message Published!");
                 window.location.href = '/publishPage'
             }
         })
     }
 
-    $(document).keypress(function(event){
+    $(document).keypress(function (event) {
         var keycode = (event.keyCode ? event.keyCode : event.which);
-        if(keycode == '13'){
+        if (keycode == '13') {
             getLocation();
         }
     });

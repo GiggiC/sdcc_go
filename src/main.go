@@ -345,9 +345,23 @@ func (r *Receivers) editSubscription(c *gin.Context) {
 	}
 }
 
-func publishPage(c *gin.Context) {
+func (r *Receivers) publishPage(c *gin.Context) {
 
-	redirecter(c, "publish.html", "logged", nil, true, http.StatusOK, "")
+	data, err := r.dbServer.db.Query("SELECT name FROM topics ")
+
+	if err != nil {
+		panic(err)
+	}
+
+	var results []string
+
+	for data.Next() {
+		var topic string
+		data.Scan(&topic)
+		results = append(results, topic)
+	}
+
+	redirecter(c, "publish.html", "logged", results, true, http.StatusOK, "")
 }
 
 func (r *Receivers) publish(c *gin.Context) {
@@ -431,7 +445,7 @@ func main() {
 	router.GET("/", loginPage)
 	router.GET("/registrationPage", registrationPage)
 	router.GET("/logout", TokenAuthMiddleware(), logout)
-	router.GET("/publishPage", TokenAuthMiddleware(), publishPage)
+	router.GET("/publishPage", TokenAuthMiddleware(), r.publishPage)
 	router.GET("/subscriptionPage", TokenAuthMiddleware(), s.subscriptionPage)
 	router.GET("/notificationsPage", TokenAuthMiddleware(), notificationsPage)
 
