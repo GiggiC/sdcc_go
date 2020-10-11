@@ -16,21 +16,31 @@
 
                     <article class="card-body">
 
-                        <form method="POST" action="/registration">
+                        <form id="form" method="POST" action="/registration">
 
                             <div class="form-group">
                                 <label for="email">Email address</label>
-                                <input type="email" class="form-control" placeholder="" name="email" id="email">
+                                <input type="email" class="form-control" placeholder="Email" name="email" id="email"
+                                       required>
                             </div>
 
                             <div class="form-group">
                                 <label for="password">Create password</label>
-                                <input class="form-control" type="password" name="password" id="password" minlength="6">
+                                <input class="form-control" type="password" name="password" id="password" minlength="6"
+                                       placeholder="Password" required>
                             </div>
 
                             <div class="form-group">
-                                <button class="btn btn-lg btn-primary btn-block" type="submit">Sign Up</button>
+                                <label for="password">Confirm password</label>
+                                <input class="form-control" type="password" name="confirmed" id="confirmed-password"
+                                       minlength="6" placeholder="Confirm Password" required oninput="check(this)">
                             </div>
+
+                            <div class="form-group">
+                                <button class="btn btn-lg btn-primary btn-block">Sign Up
+                                </button>
+                            </div>
+
                         </form>
 
                     </article>
@@ -44,5 +54,15 @@
     </div>
 
 </main>
+
+<script>
+    function check(input) {
+        if (input.value !== $('#password').val()) {
+            input.setCustomValidity('Password Must be Matching.');
+        } else {
+            input.setCustomValidity('');
+        }
+    }
+</script>
 
 {{ template "footer.html" .}}

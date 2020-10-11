@@ -21,12 +21,13 @@ type Topic struct {
 }
 
 type DataEvent struct {
-	Message   string  `json:"Message"`
-	Topic     string  `json:"Topic"`
-	Radius    int     `json:"Radius,string"`
-	LifeTime  int     `json:"LifeTime,string"`
-	Latitude  float64 `json:"Latitude"`
-	Longitude float64 `json:"Longitude"`
+	Message        string    `json:"Message"`
+	Topic          string    `json:"Topic"`
+	Radius         int       `json:"Radius,string"`
+	LifeTime       int       `json:"LifeTime,string"`
+	ExpirationTime time.Time `json:"ExpirationTime,string"`
+	Latitude       float64   `json:"Latitude"`
+	Longitude      float64   `json:"Longitude"`
 }
 
 type DataEventSlice []DataEvent
@@ -91,7 +92,7 @@ func (r *Receivers) topicUnsubscription(email string, topic string) {
 	r.eb.rm.Unlock()
 }
 
-func (r *Receivers) publishTo(topic string, message string, radius int, lifeTime int, latitude string, longitude string) bool {
+func (r *Receivers) publishTo(topic string, message string, radius int, lifeTime time.Time, latitude string, longitude string) bool {
 
 	startTime := time.Now().Nanosecond()
 
@@ -103,7 +104,7 @@ func (r *Receivers) publishTo(topic string, message string, radius int, lifeTime
 
 		latitudeFloat, _ := strconv.ParseFloat(latitude, 64)
 		longitudeFloat, _ := strconv.ParseFloat(longitude, 64)
-		dataEvent := DataEvent{Message: message, Topic: topic, Radius: radius, LifeTime: lifeTime,
+		dataEvent := DataEvent{Message: message, Topic: topic, Radius: radius, ExpirationTime: lifeTime,
 			Latitude: latitudeFloat, Longitude: longitudeFloat}
 
 		size := len(r.eb.topicMessages[topic])
@@ -128,13 +129,22 @@ func (r *Receivers) publishTo(topic string, message string, radius int, lifeTime
 	return true
 }
 
-func (r *Receivers) deleteMessage(topic string) {
+func (r *Receivers) deleteMessageFromDB(topic string) {
+
+	sqlStatement := `DELETE FROM messages WHERE topic = $1 AND lifetime < $2`
+
+	_, err := r.dbServer.db.Exec(sqlStatement, topic, time.Now())
+
+	if err != nil {
+		panic(err)
+	}
+}
+
+func (r *Receivers) deleteMessageFromQueue(topic string) {
 
 	for i := 0; i < len(r.eb.topicMessages[topic]); {
 
-		expirationTime := time.Now().Local().Add(time.Minute * time.Duration(r.eb.topicMessages[topic][i].LifeTime))
-
-		if time.Now().After(expirationTime) {
+		if time.Now().After(r.eb.topicMessages[topic][i].ExpirationTime) {
 
 			r.eb.topicMessages[topic][i] = r.eb.topicMessages[topic][len(r.eb.topicMessages[topic])-1]
 			r.eb.topicMessages[topic] = r.eb.topicMessages[topic][:len(r.eb.topicMessages[topic])-1]
@@ -154,18 +164,9 @@ func (r *Receivers) garbageCollection() {
 
 			go func() {
 
-				r.deleteMessage(topic)
-
-				sqlStatement := `DELETE FROM messages WHERE topic = $1`
-
-				_, err := r.dbServer.db.Exec(sqlStatement, topic)
-
-				if err != nil {
-					panic(err)
-				}
-
+				r.deleteMessageFromDB(topic)
+				r.deleteMessageFromQueue(topic)
 			}()
-
 		}
 
 		time.Sleep(time.Minute * time.Duration(1))
@@ -375,15 +376,16 @@ func (r *Receivers) publish(c *gin.Context) {
 		panic(err)
 	}
 
-	sqlStatement := `INSERT INTO messages (payload, topic, radius, latitude, longitude, lifetime) VALUES ($1, $2, $3, $4, $5, $6)`
+	expirationTime := time.Now().Local().Add(time.Minute * time.Duration(d.LifeTime))
 
-	_, err = r.dbServer.db.Exec(sqlStatement, d.Message, d.Topic, d.Radius, d.Latitude, d.Longitude, d.LifeTime)
+	sqlStatement := `INSERT INTO messages (payload, topic, radius, latitude, longitude, lifetime) VALUES ($1, $2, $3, $4, $5, $6)`
+	_, err = r.dbServer.db.Exec(sqlStatement, d.Message, d.Topic, d.Radius, d.Latitude, d.Longitude, expirationTime)
 
 	if err != nil {
 		panic(err)
 	}
 
-	go r.publishTo(d.Topic, d.Message, d.Radius, d.LifeTime, fmt.Sprintf("%f", d.Latitude), fmt.Sprintf("%f", d.Longitude))
+	go r.publishTo(d.Topic, d.Message, d.Radius, expirationTime, fmt.Sprintf("%f", d.Latitude), fmt.Sprintf("%f", d.Longitude))
 }
 
 func (r *Receivers) initEB() {
@@ -397,8 +399,9 @@ func (r *Receivers) initEB() {
 	for messages.Next() {
 		var payload, topic, latitude, longitude string
 		var radius, lifetime, id int
+		expirationTime := time.Now().Local().Add(time.Minute * time.Duration(lifetime))
 		messages.Scan(&payload, &topic, &id, &radius, &latitude, &longitude, &lifetime)
-		r.publishTo(topic, payload, radius, lifetime, latitude, longitude)
+		r.publishTo(topic, payload, radius, expirationTime, latitude, longitude)
 
 	}
 
@@ -437,7 +440,7 @@ func main() {
 
 	r.initEB()
 
-	// go r.garbageCollection()
+	go r.garbageCollection()
 
 	router.StaticFS("/static/", http.Dir("../static"))
 	router.LoadHTMLGlob("../templates/*")

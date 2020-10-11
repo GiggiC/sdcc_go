@@ -105,7 +105,6 @@ func ExtractToken(c *gin.Context) string {
 
 	if err != nil || accessToken.Value == "" {
 
-		redirecter(c, "login.html", "not-logged", nil, false, http.StatusUnauthorized, "")
 		return ""
 	}
 

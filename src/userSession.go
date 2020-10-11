@@ -15,9 +15,9 @@ type AccessDetails struct {
 
 func registrationPage(c *gin.Context) {
 
-	accessToken, err := c.Request.Cookie("access_token")
+	err := TokenValid(c)
 
-	if err != nil || accessToken.Value == "" {
+	if err != nil {
 
 		redirecter(c, "registration.html", "not-logged", nil, false, http.StatusOK, "")
 
@@ -29,7 +29,6 @@ func registrationPage(c *gin.Context) {
 
 func (s *server) registration(c *gin.Context) {
 
-	username := c.Request.FormValue("username")
 	password := c.Request.FormValue("password")
 	email := c.Request.FormValue("email")
 
@@ -48,15 +47,15 @@ func (s *server) registration(c *gin.Context) {
 			redirecter(c, "registration.html", "not-logged", nil, false, http.StatusInternalServerError, "")
 		}
 
-		sqlStatement := `INSERT INTO users (email, username, password) VALUES ($1, $2, $3)`
+		sqlStatement := `INSERT INTO users (email, password) VALUES ($1, $2)`
 
-		_, err = s.db.Exec(sqlStatement, email, username, hashedPassword)
+		_, err = s.db.Exec(sqlStatement, email, hashedPassword)
 
 		if err != nil {
 			panic(err)
 		}
 
-		redirecter(c, "registration.html", "not-logged", nil, false, http.StatusInternalServerError, "")
+		redirecter(c, "login.html", "not-logged", nil, false, http.StatusOK, "")
 		return
 
 	case err != nil:
@@ -75,7 +74,11 @@ func loginPage(c *gin.Context) {
 
 	err := TokenValid(c)
 
-	if err == nil {
+	if err != nil {
+
+		redirecter(c, "login.html", "not-logged", nil, false, http.StatusOK, "")
+
+	} else {
 
 		redirecter(c, "notifications.html", "logged", nil, true, http.StatusOK, "")
 	}
