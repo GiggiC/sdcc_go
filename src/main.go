@@ -87,51 +87,43 @@ func (r *Receivers) topicUnsubscription(email string, topic string) {
 	}
 
 	delete(r.eb.userTopics, email)
+
 	r.eb.userTopics[email] = newList
+
+	fmt.Println("TOPIC: ", r.eb.userTopics[email])
 
 	r.eb.rm.Unlock()
 }
 
 func (r *Receivers) publishTo(topic string, message string, radius int, lifeTime time.Time, latitude string, longitude string) bool {
 
-	startTime := time.Now().Nanosecond()
-
 	r.eb.rm.RLock()
 
 	checked := false
 
-	for i := 0; i < 5; i++ {
+	latitudeFloat, _ := strconv.ParseFloat(latitude, 64)
+	longitudeFloat, _ := strconv.ParseFloat(longitude, 64)
+	dataEvent := DataEvent{Message: message, Topic: topic, Radius: radius, ExpirationTime: lifeTime,
+		Latitude: latitudeFloat, Longitude: longitudeFloat}
 
-		latitudeFloat, _ := strconv.ParseFloat(latitude, 64)
-		longitudeFloat, _ := strconv.ParseFloat(longitude, 64)
-		dataEvent := DataEvent{Message: message, Topic: topic, Radius: radius, ExpirationTime: lifeTime,
-			Latitude: latitudeFloat, Longitude: longitudeFloat}
+	size := len(r.eb.topicMessages[topic])
+	r.eb.topicMessages[topic] = append(r.eb.topicMessages[topic], dataEvent)
+	size1 := len(r.eb.topicMessages[topic])
 
-		size := len(r.eb.topicMessages[topic])
-		r.eb.topicMessages[topic] = append(r.eb.topicMessages[topic], dataEvent)
-		size1 := len(r.eb.topicMessages[topic])
+	//size is bigger if insertion is completed
+	if size1 > size {
 
-		if size1 > size {
-
-			checked = true
-		}
-
-		endTime := time.Now().Nanosecond()
-
-		if (endTime-startTime) < 100000000 && checked {
-
-			break
-		}
+		checked = true
 	}
 
 	r.eb.rm.RUnlock()
 
-	return true
+	return checked
 }
 
 func (r *Receivers) deleteMessageFromDB(topic string) {
 
-	sqlStatement := `DELETE FROM messages WHERE topic = $1 AND lifetime < $2`
+	sqlStatement := `DELETE FROM messages WHERE topic = $1 AND lifetime <= $2`
 
 	_, err := r.dbServer.db.Exec(sqlStatement, topic, time.Now())
 
@@ -164,7 +156,7 @@ func (r *Receivers) garbageCollection() {
 
 			go func() {
 
-				r.deleteMessageFromDB(topic)
+				r.deleteMessageFromDB(topic) //TODO daily delay
 				r.deleteMessageFromQueue(topic)
 			}()
 		}
@@ -199,8 +191,6 @@ func (r *Receivers) notifications(c *gin.Context) {
 	ad, _ := ExtractTokenMetadata(c)
 	email := ad.Email
 
-	startTime := time.Now().Nanosecond()
-
 	var d DataEvent
 	err := json.NewDecoder(c.Request.Body).Decode(&d)
 
@@ -208,52 +198,32 @@ func (r *Receivers) notifications(c *gin.Context) {
 		panic(err)
 	}
 
-	data, err := r.dbServer.db.Query("SELECT topic FROM subscriptions "+
-		"WHERE subscriber = $1", email)
-
-	if err != nil {
-		panic(err)
-	}
-
-	var results []string
-
-	for data.Next() {
-		var topic string
-		data.Scan(&topic)
-		results = append(results, topic)
-	}
-
 	var notifications []DataEvent
 
-	for i := 0; i < 5; i++ {
+	for _, topic := range r.eb.userTopics[email] {
 
-		for _, topic := range r.eb.userTopics[email] {
+		fmt.Println("Topic: ", topic)
 
-			for _, message := range r.eb.topicMessages[topic] {
+		for _, message := range r.eb.topicMessages[topic] {
 
-				if checkDistance(d.Latitude, message.Latitude, d.Longitude, message.Longitude, d.Radius, message.Radius) {
+			if checkDistance(d.Latitude, message.Latitude, d.Longitude, message.Longitude, d.Radius, message.Radius) {
 
-					notifications = append(notifications, message)
-				}
+				fmt.Println("Message: ", message)
+				notifications = append(notifications, message)
 			}
-		}
-
-		endTime := time.Now().Nanosecond()
-
-		if (endTime - startTime) < 100000000 {
-
-			break
 		}
 	}
 
 	result, _ := json.Marshal(notifications)
+
+	fmt.Println("results: ", notifications)
 
 	c.Writer.Header().Set("Content-Type", "application/json")
 
 	_, err = c.Writer.Write(result)
 
 	if err != nil {
-		fmt.Println(err)
+		panic(err)
 	}
 }
 
@@ -378,14 +348,47 @@ func (r *Receivers) publish(c *gin.Context) {
 
 	expirationTime := time.Now().Local().Add(time.Minute * time.Duration(d.LifeTime))
 
-	sqlStatement := `INSERT INTO messages (payload, topic, radius, latitude, longitude, lifetime) VALUES ($1, $2, $3, $4, $5, $6)`
-	_, err = r.dbServer.db.Exec(sqlStatement, d.Message, d.Topic, d.Radius, d.Latitude, d.Longitude, expirationTime)
+	var msgID int
+	err = r.dbServer.db.QueryRow(`INSERT INTO messages (payload, topic, radius, latitude, longitude, lifetime) 
+		VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`, d.Message, d.Topic, d.Radius, d.Latitude, d.Longitude, expirationTime).Scan(&msgID)
+
+	variable := "fail"
+
+	if err == nil {
+
+		ch := make(chan bool)
+
+		go func() {
+			ch <- r.publishTo(d.Topic, d.Message, d.Radius, expirationTime, fmt.Sprintf("%f", d.Latitude), fmt.Sprintf("%f", d.Longitude))
+		}()
+
+		checked := <-ch
+
+		if checked {
+
+			variable = "success"
+
+		} else {
+
+			sqlStatement := `DELETE FROM messages WHERE id = $1`
+
+			_, err := r.dbServer.db.Exec(sqlStatement, msgID)
+
+			if err != nil {
+				panic(err)
+			}
+
+			variable = "fail"
+		}
+	}
+
+	result, _ := json.Marshal(variable)
+	c.Writer.Header().Set("Content-Type", "application/json")
+	_, err = c.Writer.Write(result)
 
 	if err != nil {
 		panic(err)
 	}
-
-	go r.publishTo(d.Topic, d.Message, d.Radius, expirationTime, fmt.Sprintf("%f", d.Latitude), fmt.Sprintf("%f", d.Longitude))
 }
 
 func (r *Receivers) initEB() {
@@ -398,10 +401,10 @@ func (r *Receivers) initEB() {
 
 	for messages.Next() {
 		var payload, topic, latitude, longitude string
-		var radius, lifetime, id int
-		expirationTime := time.Now().Local().Add(time.Minute * time.Duration(lifetime))
+		var radius, id int
+		var lifetime time.Time
 		messages.Scan(&payload, &topic, &id, &radius, &latitude, &longitude, &lifetime)
-		r.publishTo(topic, payload, radius, expirationTime, latitude, longitude)
+		r.publishTo(topic, payload, radius, lifetime, latitude, longitude)
 
 	}
 
