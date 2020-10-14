@@ -22,9 +22,10 @@ type Topic struct {
 }
 
 type DataEvent struct {
-	RequestID      string    `json:"RequestID"`
 	Message        string    `json:"Message"`
+	Title          string    `json:"Title"`
 	Topic          string    `json:"Topic"`
+	RequestID      string    `json:"RequestID"`
 	Radius         int       `json:"Radius,string"`
 	LifeTime       int       `json:"LifeTime,string"`
 	InsertionTime  time.Time `json:"InsertionTime,string"`
@@ -49,10 +50,13 @@ type Receivers struct {
 }
 
 var requests = make(map[string]DataEvent)
-var p = properties.MustLoadFile("conf.properties", properties.UTF8)
-
-var deliverySemantic = p.GetString("delivery-semantic", "def")
-
+var p = properties.MustLoadFile("../conf.properties", properties.UTF8)
+var deliverySemantic = p.GetString("delivery-semantic", "at-least-once")
+var retryLimit = p.GetInt("retry-limit", 5)
+var deliveryTimeout = p.GetInt("delivery-timeout", 3000)
+var eliminationPeriod = p.GetInt("elimination-period", 1)
+var requestLifetime = p.GetInt("request-lifetime", 2)
+var garbageCollectorPeriod = p.GetInt("garbage-collector-period", 1)
 var router = gin.Default()
 
 func (r *Receivers) topicSubscription(topic string, email string) {
@@ -101,7 +105,7 @@ func (r *Receivers) topicUnsubscription(email string, topic string) {
 	r.eb.rm.Unlock()
 }
 
-func (r *Receivers) publishTo(topic string, message string, radius int, lifeTime time.Time, latitude string, longitude string) bool {
+func (r *Receivers) publishTo(topic string, title string, message string, radius int, lifeTime time.Time, latitude string, longitude string) bool {
 
 	r.eb.rm.RLock()
 
@@ -109,7 +113,7 @@ func (r *Receivers) publishTo(topic string, message string, radius int, lifeTime
 
 	latitudeFloat, _ := strconv.ParseFloat(latitude, 64)
 	longitudeFloat, _ := strconv.ParseFloat(longitude, 64)
-	dataEvent := DataEvent{Message: message, Topic: topic, Radius: radius, ExpirationTime: lifeTime,
+	dataEvent := DataEvent{Message: message, Topic: topic, Title: title, Radius: radius, ExpirationTime: lifeTime,
 		Latitude: latitudeFloat, Longitude: longitudeFloat}
 
 	size := len(r.eb.topicMessages[topic])
@@ -118,7 +122,6 @@ func (r *Receivers) publishTo(topic string, message string, radius int, lifeTime
 
 	//size is bigger if insertion is completed
 	if size1 > size {
-
 		checked = true
 	}
 
@@ -131,7 +134,7 @@ func (r *Receivers) deleteMessageFromDB(topic string) {
 
 	sqlStatement := `DELETE FROM messages WHERE topic = $1 AND lifetime <= $2`
 
-	_, err := r.dbServer.db.Exec(sqlStatement, topic, time.Now())
+	_, err := r.dbServer.db.Exec(sqlStatement, topic, time.Now().Local())
 
 	if err != nil {
 		panic(err)
@@ -142,7 +145,7 @@ func (r *Receivers) deleteMessageFromQueue(topic string) {
 
 	for i := 0; i < len(r.eb.topicMessages[topic]); {
 
-		if time.Now().After(r.eb.topicMessages[topic][i].ExpirationTime) {
+		if time.Now().Local().After(r.eb.topicMessages[topic][i].ExpirationTime) {
 
 			r.eb.topicMessages[topic][i] = r.eb.topicMessages[topic][len(r.eb.topicMessages[topic])-1]
 			r.eb.topicMessages[topic] = r.eb.topicMessages[topic][:len(r.eb.topicMessages[topic])-1]
@@ -160,13 +163,12 @@ func requestsRemoval() {
 
 		for item := range requests {
 
-			if time.Now().Local().After(requests[item].InsertionTime.Add(time.Minute * 2)) {
-
+			if time.Now().Local().After(requests[item].InsertionTime.Add(time.Minute * time.Duration(requestLifetime))) {
 				delete(requests, item)
 			}
 		}
 
-		time.Sleep(time.Minute * time.Duration(1))
+		time.Sleep(time.Minute * time.Duration(eliminationPeriod))
 	}
 }
 
@@ -191,13 +193,12 @@ func (r *Receivers) garbageCollection() {
 		for topic := range r.eb.topicMessages {
 
 			go func() {
-
 				r.deleteMessageFromDB(topic) //TODO daily delay
 				r.deleteMessageFromQueue(topic)
 			}()
 		}
 
-		time.Sleep(time.Minute * time.Duration(1))
+		time.Sleep(time.Minute * time.Duration(garbageCollectorPeriod))
 	}
 }
 
@@ -208,7 +209,6 @@ func checkDistance(x1 float64, x2 float64, y1 float64, y2 float64, r1 int, r2 in
 	_, km := haversine.Distance(sessionLocation, publisherLocation)
 
 	if km > float64(r1+r2) {
-
 		return false
 	}
 
@@ -217,7 +217,7 @@ func checkDistance(x1 float64, x2 float64, y1 float64, y2 float64, r1 int, r2 in
 
 func notificationsPage(c *gin.Context) {
 
-	redirecter(c, "notifications.html", "logged", nil, true, http.StatusOK, "")
+	redirect(c, "notifications.html", "logged", nil, true, http.StatusOK, "Notifications")
 }
 
 func (r *Receivers) notifications(c *gin.Context) {
@@ -263,8 +263,7 @@ func (s *server) subscriptionPage(c *gin.Context) {
 	ad, _ := ExtractTokenMetadata(c)
 	email := ad.Email
 
-	data, err := s.db.Query("SELECT topic FROM subscriptions"+
-		" WHERE subscriber = $1", email)
+	data, err := s.db.Query("SELECT topic FROM subscriptions WHERE subscriber = $1", email)
 
 	if err != nil {
 		panic(err)
@@ -275,7 +274,7 @@ func (s *server) subscriptionPage(c *gin.Context) {
 
 	for data.Next() {
 		var name string
-		data.Scan(&name)
+		_ = data.Scan(&name)
 		tRes.Name = name
 		tRes.Flag = true
 		results = append(results, tRes)
@@ -296,7 +295,7 @@ func (s *server) subscriptionPage(c *gin.Context) {
 		results = append(results, tRes)
 	}
 
-	redirecter(c, "subscribe.html", "logged", results, true, http.StatusOK, "")
+	redirect(c, "subscribe.html", "logged", results, true, http.StatusOK, "Subscription Page")
 }
 
 func (r *Receivers) editSubscription(c *gin.Context) {
@@ -347,6 +346,8 @@ func (r *Receivers) editSubscription(c *gin.Context) {
 
 func (r *Receivers) publishPage(c *gin.Context) {
 
+	checkSession(c)
+
 	data, err := r.dbServer.db.Query("SELECT name FROM topics ")
 
 	if err != nil {
@@ -357,11 +358,28 @@ func (r *Receivers) publishPage(c *gin.Context) {
 
 	for data.Next() {
 		var topic string
-		data.Scan(&topic)
+		_ = data.Scan(&topic)
 		results = append(results, topic)
 	}
 
-	redirecter(c, "publish.html", "logged", results, true, http.StatusOK, "")
+	var email string
+
+	ad, _ := ExtractTokenMetadata(c)
+	email = ad.Email
+
+	c.HTML(
+		http.StatusOK,
+		"publish.html",
+		gin.H{
+			"title":            "",
+			"status":           "logged",
+			"results":          results,
+			"email":            email,
+			"deliverySemantic": deliverySemantic,
+			"deliveryTimeout":  deliveryTimeout,
+			"retryLimit":       retryLimit,
+		},
+	)
 }
 
 func (r *Receivers) publish(c *gin.Context) {
@@ -389,15 +407,15 @@ func (r *Receivers) publish(c *gin.Context) {
 		expirationTime := time.Now().Local().Add(time.Minute * time.Duration(message.LifeTime))
 
 		var msgID int
-		err = r.dbServer.db.QueryRow(`INSERT INTO messages (payload, topic, radius, latitude, longitude, lifetime) 
-		VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`, message.Message, message.Topic, message.Radius, message.Latitude, message.Longitude, expirationTime).Scan(&msgID)
+		err = r.dbServer.db.QueryRow(`INSERT INTO messages (payload, topic, radius, latitude, longitude, lifetime, title) 
+		VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`, message.Message, message.Topic, message.Radius, message.Latitude, message.Longitude, expirationTime, message.Title).Scan(&msgID)
 
 		if err == nil {
 
 			ch := make(chan bool)
 
 			go func() {
-				ch <- r.publishTo(message.Topic, message.Message, message.Radius, expirationTime, fmt.Sprintf("%f", message.Latitude), fmt.Sprintf("%f", message.Longitude))
+				ch <- r.publishTo(message.Topic, message.Title, message.Message, message.Radius, expirationTime, fmt.Sprintf("%f", message.Latitude), fmt.Sprintf("%f", message.Longitude))
 			}()
 
 			checked := <-ch
@@ -448,11 +466,11 @@ func (r *Receivers) initEB() {
 	}
 
 	for messages.Next() {
-		var payload, topic, latitude, longitude string
+		var payload, topic, title, latitude, longitude string
 		var radius, id int
 		var lifetime time.Time
-		messages.Scan(&payload, &topic, &id, &radius, &latitude, &longitude, &lifetime)
-		r.publishTo(topic, payload, radius, lifetime, latitude, longitude)
+		_ = messages.Scan(&payload, &topic, &id, &radius, &latitude, &longitude, &lifetime, &title)
+		r.publishTo(topic, title, payload, radius, lifetime, latitude, longitude)
 
 	}
 
@@ -465,8 +483,7 @@ func (r *Receivers) initEB() {
 	for subscriptions.Next() {
 
 		var subscriber, topic string
-		subscriptions.Scan(&subscriber, &topic)
-
+		_ = subscriptions.Scan(&subscriber, &topic)
 		r.topicSubscription(topic, subscriber)
 	}
 

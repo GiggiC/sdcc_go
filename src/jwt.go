@@ -19,7 +19,7 @@ type TokenDetails struct {
 func CreateToken(email string) (*TokenDetails, error) {
 
 	td := &TokenDetails{}
-	td.AtExpires = time.Now().Add(time.Minute * 15).Unix()
+	td.AtExpires = time.Now().Local().Add(time.Minute * 15).Unix()
 	td.AccessUuid = uuid.NewV4().String()
 
 	err := os.Setenv("ACCESS_SECRET", "jdnfksdmfksd")
@@ -47,7 +47,7 @@ func CreateToken(email string) (*TokenDetails, error) {
 func CreateAuth(email string, td *TokenDetails) error {
 
 	at := time.Unix(td.AtExpires, 0) //converting Unix to UTC(to Time object)
-	now := time.Now()
+	now := time.Now().Local()
 
 	errAccess := client.Set(ctx, td.AccessUuid, email, at.Sub(now)).Err()
 
@@ -170,7 +170,7 @@ func TokenAuthMiddleware() gin.HandlerFunc {
 
 		if err != nil {
 
-			redirecter(c, "login.html", "not-logged", nil, false, http.StatusUnauthorized, "")
+			redirect(c, "login.html", "not-logged", nil, false, http.StatusUnauthorized, "Login Page")
 			c.Abort()
 			return
 		}

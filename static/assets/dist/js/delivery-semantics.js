@@ -1,6 +1,7 @@
 function getPositionAtLeastOnce(position) {
 
-    var payload = $('#payload').val();
+    var title = $('#title').val();
+    var message = $('#message').val();
     var topic = $('#topic').val();
     var radius = $('#radius').val();
     var lifeTime = $('#lifeTime').val();
@@ -10,9 +11,9 @@ function getPositionAtLeastOnce(position) {
     $.ajax({
         type: "POST",
         url: "/publish",
-        timeout: 3000,
+        timeout: $('#deliveryTimeout'),
         data: JSON.stringify({
-            Message: payload, Topic: topic, Radius: radius, LifeTime: lifeTime,
+            Message: message, Topic: topic, Title: title, Radius: radius, LifeTime: lifeTime,
             Latitude: latitude, Longitude: longitude
         }),
         success: function (data) {
@@ -24,7 +25,6 @@ function getPositionAtLeastOnce(position) {
             }
         },
         error: function (jqXHR, textStatus) {
-            console.log(textStatus)
             if (textStatus === 'timeout') {
                 $.ajax(this);
             }
@@ -34,7 +34,8 @@ function getPositionAtLeastOnce(position) {
 
 function getPositionAtMostOnce(position) {
 
-    var payload = $('#payload').val();
+    var title = $('#title').val();
+    var message = $('#message').val();
     var topic = $('#topic').val();
     var radius = $('#radius').val();
     var lifeTime = $('#lifeTime').val();
@@ -48,11 +49,11 @@ function getPositionAtMostOnce(position) {
     $.ajax({
         type: "POST",
         url: "/publish",
-        timeout: 3000,
+        timeout: $('deliveryTimeout'),
         tryCount: 0,
-        retryLimit: 5,
+        retryLimit: $('#retryLimit'),
         data: JSON.stringify({
-            Message: payload, Topic: topic, Radius: radius, LifeTime: lifeTime,
+            Message: message, Topic: topic, Title: title, Radius: radius, LifeTime: lifeTime,
             Latitude: latitude, Longitude: longitude, RequestID: id
         }),
         success: function (data) {
@@ -76,7 +77,8 @@ function getPositionAtMostOnce(position) {
 
 function getPositionExactlyOnce(position) {
 
-    var payload = $('#payload').val();
+    var title = $('#title').val();
+    var message = $('#message').val();
     var topic = $('#topic').val();
     var radius = $('#radius').val();
     var lifeTime = $('#lifeTime').val();
@@ -90,9 +92,9 @@ function getPositionExactlyOnce(position) {
     $.ajax({
         type: "POST",
         url: "/publish",
-        timeout: 3000,
+        timeout: $('#deliveryTimeout'),
         data: JSON.stringify({
-            Message: payload, Topic: topic, Radius: radius, LifeTime: lifeTime,
+            Message: message, Topic: topic, Title: title, Radius: radius, LifeTime: lifeTime,
             Latitude: latitude, Longitude: longitude, RequestID: id
         }),
         success: function (data) {

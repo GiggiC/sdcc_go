@@ -19,11 +19,11 @@ func registrationPage(c *gin.Context) {
 
 	if err != nil {
 
-		redirecter(c, "registration.html", "not-logged", nil, false, http.StatusOK, "")
+		redirect(c, "registration.html", "not-logged", nil, false, http.StatusOK, "Registration Page")
 
 	} else {
 
-		redirecter(c, "notifications.html", "logged", nil, true, http.StatusOK, "")
+		redirect(c, "notifications.html", "logged", nil, true, http.StatusOK, "Notifications")
 	}
 }
 
@@ -44,7 +44,7 @@ func (s *server) registration(c *gin.Context) {
 
 		if err != nil {
 
-			redirecter(c, "registration.html", "not-logged", nil, false, http.StatusInternalServerError, "")
+			redirect(c, "registration.html", "not-logged", nil, false, http.StatusInternalServerError, "Registration Page")
 		}
 
 		sqlStatement := `INSERT INTO users (email, password) VALUES ($1, $2)`
@@ -55,17 +55,17 @@ func (s *server) registration(c *gin.Context) {
 			panic(err)
 		}
 
-		redirecter(c, "login.html", "not-logged", nil, false, http.StatusOK, "")
+		redirect(c, "login.html", "not-logged", nil, false, http.StatusOK, "Login Page")
 		return
 
 	case err != nil:
 
-		redirecter(c, "registrationError.html", "not-logged", nil, false, http.StatusInternalServerError, "")
+		redirect(c, "registrationError.html", "not-logged", nil, false, http.StatusInternalServerError, "Registration Error")
 		return
 
 	default:
 
-		redirecter(c, "registrationError.html", "not-logged", nil, false, http.StatusInternalServerError, "") //TODO general error
+		redirect(c, "registrationError.html", "not-logged", nil, false, http.StatusInternalServerError, "Registration Error") //TODO general error
 		return
 	}
 }
@@ -76,11 +76,11 @@ func loginPage(c *gin.Context) {
 
 	if err != nil {
 
-		redirecter(c, "login.html", "not-logged", nil, false, http.StatusOK, "")
+		redirect(c, "login.html", "not-logged", nil, false, http.StatusOK, "Login Page")
 
 	} else {
 
-		redirecter(c, "notifications.html", "logged", nil, true, http.StatusOK, "")
+		redirect(c, "notifications.html", "logged", nil, true, http.StatusOK, "Notifications")
 	}
 }
 
@@ -96,7 +96,7 @@ func (s *server) login(c *gin.Context) {
 
 	if err != nil {
 
-		redirecter(c, "login.html", "not-logged", nil, false, http.StatusUnauthorized, "")
+		redirect(c, "login.html", "not-logged", nil, false, http.StatusUnauthorized, "Login Page")
 		return
 	}
 
@@ -104,7 +104,7 @@ func (s *server) login(c *gin.Context) {
 
 	if err != nil {
 
-		redirecter(c, "login.html", "not-logged", nil, false, http.StatusUnauthorized, "")
+		redirect(c, "login.html", "not-logged", nil, false, http.StatusUnauthorized, "Login Page")
 		return
 	}
 
@@ -112,24 +112,24 @@ func (s *server) login(c *gin.Context) {
 
 	if err != nil {
 
-		redirecter(c, "login.html", "not-logged", nil, false, http.StatusUnprocessableEntity, "")
+		redirect(c, "login.html", "not-logged", nil, false, http.StatusUnprocessableEntity, "Login Page")
 		return
 	}
 
 	saveErr := CreateAuth(email, ts)
 
 	if saveErr != nil {
-		redirecter(c, "login.html", "not-logged", nil, false, http.StatusUnprocessableEntity, "")
+		redirect(c, "login.html", "not-logged", nil, false, http.StatusUnprocessableEntity, "Login Page")
 		return
 	}
 
 	http.SetCookie(c.Writer, &http.Cookie{
 		Name:    "access_token",
 		Value:   ts.AccessToken,
-		Expires: time.Now().Add(time.Minute * 15),
+		Expires: time.Now().Local().Add(time.Minute * 15),
 	})
 
-	redirecter(c, "notifications.html", "logged", nil, false, http.StatusOK, "")
+	redirect(c, "notifications.html", "logged", nil, false, http.StatusOK, "Notifications")
 
 }
 
@@ -142,17 +142,17 @@ func logout(c *gin.Context) {
 
 	if delErr != nil || deleted == 0 { //if any goes wrong
 
-		redirecter(c, "login.html", "not-logged", nil, false, http.StatusUnauthorized, "") //TODO error
+		redirect(c, "login.html", "not-logged", nil, false, http.StatusUnauthorized, "Login Page") //TODO error
 		return
 	}
 
 	http.SetCookie(c.Writer, &http.Cookie{
 		Name:    "access_token",
 		Value:   "",
-		Expires: time.Now(),
+		Expires: time.Now().Local(),
 	})
 
-	redirecter(c, "login.html", "not-logged", nil, false, http.StatusOK, "")
+	redirect(c, "login.html", "not-logged", nil, false, http.StatusOK, "Login Page")
 }
 
 func checkSession(c *gin.Context) {
@@ -162,12 +162,12 @@ func checkSession(c *gin.Context) {
 
 	if exErr != nil || fErr != nil {
 
-		redirecter(c, "login.html", "not-logged", nil, false, http.StatusUnauthorized, "")
+		redirect(c, "login.html", "not-logged", nil, false, http.StatusUnauthorized, "Login Page")
 		c.Abort()
 	}
 }
 
-func redirecter(c *gin.Context, url string, status string, results interface{}, check bool, code int, title string) {
+func redirect(c *gin.Context, url string, status string, results interface{}, check bool, code int, title string) {
 
 	var email string
 
@@ -181,10 +181,11 @@ func redirecter(c *gin.Context, url string, status string, results interface{}, 
 		code,
 		url,
 		gin.H{
-			"title":   title,
-			"status":  status,
-			"results": results,
-			"email":   email,
+			"title":            title,
+			"status":           status,
+			"results":          results,
+			"email":            email,
+			"deliverySemantic": deliverySemantic,
 		},
 	)
 }
