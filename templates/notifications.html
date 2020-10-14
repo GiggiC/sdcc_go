@@ -25,7 +25,7 @@
         $(document).ready(function () {
 
             if (navigator.geolocation) { // Supported
-                navigator.geolocation.getCurrentPosition(getPosition);
+                navigator.geolocation.getCurrentPosition(getPositionNotifications);
             } else { // Not supported
                 alert("Oops! This browser does not support HTML Geolocation.");
             }
@@ -35,13 +35,13 @@
         slider.onchange = function () {
             output.innerHTML = this.value;
             if (navigator.geolocation) { // Supported
-                navigator.geolocation.getCurrentPosition(getPosition);
+                navigator.geolocation.getCurrentPosition(getPositionNotifications);
             } else { // Not supported
                 alert("Oops! This browser does not support HTML Geolocation.");
             }
         }
 
-        function getPosition(position) {
+        function getPositionNotifications(position) {
 
             const latitude = position.coords.latitude;
             const longitude = position.coords.longitude;
@@ -49,12 +49,13 @@
             $.ajax({
                 type: "POST",
                 url: "/notifications",
-                data: JSON.stringify({
+                data: JSON.stringify(
+                    {
                         latitude: latitude,
                         longitude: longitude,
                         radius: slider.value
                     }
-                ), //If the request needs any data
+                ),
                 success: function (result) {
                     if (result != null) {
                         var table = $('#table');
@@ -82,7 +83,7 @@
                         $(tblHeader).appendTo(table);
                         $("#example").DataTable();
                     }
-                }
+                },
             })
         }
     </script>

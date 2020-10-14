@@ -169,8 +169,12 @@ func checkSession(c *gin.Context) {
 
 func redirecter(c *gin.Context, url string, status string, results interface{}, check bool, code int, title string) {
 
+	var email string
+
 	if check {
 		checkSession(c)
+		ad, _ := ExtractTokenMetadata(c)
+		email = ad.Email
 	}
 
 	c.HTML(
@@ -180,6 +184,7 @@ func redirecter(c *gin.Context, url string, status string, results interface{}, 
 			"title":   title,
 			"status":  status,
 			"results": results,
+			"email":   email,
 		},
 	)
 }

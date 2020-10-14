@@ -52,8 +52,7 @@
 
             </div>
 
-            <input type="text" class="form-control" id="latitude" hidden value="">
-            <input type="text" class="form-control" id="longitude" hidden value="">
+            <input type="text" class="form-control" id="email" hidden value="{{.email}}">
 
             <hr class="mb-4">
             <button class="btn btn-primary btn-lg btn-block" onclick="getLocation()" type="submit">Send Message
@@ -67,46 +66,10 @@
     function getLocation() {
         // Check whether browser supports Geolocation API or not
         if (navigator.geolocation) { // Supported
-            navigator.geolocation.getCurrentPosition(getPosition);
+            navigator.geolocation.getCurrentPosition(getPositionExactlyOnce);
         } else { // Not supported
             alert("Oops! This browser does not support HTML Geolocation.");
         }
-    }
-
-    function getPosition(position) {
-        const payload = document.getElementById('payload').value;
-        const topic = document.getElementById('topic').value;
-        const radius = document.getElementById('radius').value;
-        const lifeTime = document.getElementById('lifeTime').value;
-        const latitude = position.coords.latitude;
-        const longitude = position.coords.longitude;
-
-        $.ajax({
-            type: "POST",
-            url: "/publish",
-            timeout: 3000, // sets timeout to 3 seconds
-            data: JSON.stringify({
-                Message: payload, Topic: topic, Radius: radius, LifeTime: lifeTime,
-                Latitude: latitude, Longitude: longitude
-            }), //If the request needs any data
-            success: function (data, textStatus) {
-
-                if (data === "fail") {
-                    $.ajax(this);
-                }
-                alert("Message Published!");
-
-                window.location.href = '/publishPage'
-            },
-            error: function(jqXHR, textStatus){
-                console.log(textStatus)
-                if(textStatus === 'timeout')
-                {
-                    $.ajax(this);
-                    //do something. Try again perhaps?
-                }
-            }
-        })
     }
 
     $(document).keypress(function (event) {
@@ -114,8 +77,7 @@
         if (keycode == '13') {
             getLocation();
         }
-    });
-
+    })
 </script>
 
 {{ template "footer.html" .}}

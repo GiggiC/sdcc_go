@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"github.com/gin-gonic/gin"
 	_ "github.com/lib/pq"
+	"github.com/magiconair/properties"
 	"github.com/umahmood/haversine"
 	"log"
 	"net/http"
@@ -21,10 +22,12 @@ type Topic struct {
 }
 
 type DataEvent struct {
+	RequestID      string    `json:"RequestID"`
 	Message        string    `json:"Message"`
 	Topic          string    `json:"Topic"`
 	Radius         int       `json:"Radius,string"`
 	LifeTime       int       `json:"LifeTime,string"`
+	InsertionTime  time.Time `json:"InsertionTime,string"`
 	ExpirationTime time.Time `json:"ExpirationTime,string"`
 	Latitude       float64   `json:"Latitude"`
 	Longitude      float64   `json:"Longitude"`
@@ -44,6 +47,11 @@ type Receivers struct {
 	dbServer server
 	eb       EventBus
 }
+
+var requests = make(map[string]DataEvent)
+var p = properties.MustLoadFile("conf.properties", properties.UTF8)
+
+var deliverySemantic = p.GetString("delivery-semantic", "def")
 
 var router = gin.Default()
 
@@ -89,8 +97,6 @@ func (r *Receivers) topicUnsubscription(email string, topic string) {
 	delete(r.eb.userTopics, email)
 
 	r.eb.userTopics[email] = newList
-
-	fmt.Println("TOPIC: ", r.eb.userTopics[email])
 
 	r.eb.rm.Unlock()
 }
@@ -148,6 +154,36 @@ func (r *Receivers) deleteMessageFromQueue(topic string) {
 	}
 }
 
+func requestsRemoval() {
+
+	for {
+
+		for item := range requests {
+
+			if time.Now().Local().After(requests[item].InsertionTime.Add(time.Minute * 2)) {
+
+				delete(requests, item)
+			}
+		}
+
+		time.Sleep(time.Minute * time.Duration(1))
+	}
+}
+
+func removeRequest(c *gin.Context) {
+
+	checkSession(c)
+
+	var message DataEvent
+	err := json.NewDecoder(c.Request.Body).Decode(&message)
+
+	if err != nil {
+		panic(err)
+	}
+
+	delete(requests, message.RequestID)
+}
+
 func (r *Receivers) garbageCollection() {
 
 	for {
@@ -202,24 +238,17 @@ func (r *Receivers) notifications(c *gin.Context) {
 
 	for _, topic := range r.eb.userTopics[email] {
 
-		fmt.Println("Topic: ", topic)
-
 		for _, message := range r.eb.topicMessages[topic] {
 
 			if checkDistance(d.Latitude, message.Latitude, d.Longitude, message.Longitude, d.Radius, message.Radius) {
 
-				fmt.Println("Message: ", message)
 				notifications = append(notifications, message)
 			}
 		}
 	}
 
 	result, _ := json.Marshal(notifications)
-
-	fmt.Println("results: ", notifications)
-
 	c.Writer.Header().Set("Content-Type", "application/json")
-
 	_, err = c.Writer.Write(result)
 
 	if err != nil {
@@ -339,47 +368,66 @@ func (r *Receivers) publish(c *gin.Context) {
 
 	checkSession(c)
 
-	var d DataEvent
-	err := json.NewDecoder(c.Request.Body).Decode(&d)
+	var message DataEvent
+	err := json.NewDecoder(c.Request.Body).Decode(&message)
 
 	if err != nil {
 		panic(err)
 	}
 
-	expirationTime := time.Now().Local().Add(time.Minute * time.Duration(d.LifeTime))
+	found := true
 
-	var msgID int
-	err = r.dbServer.db.QueryRow(`INSERT INTO messages (payload, topic, radius, latitude, longitude, lifetime) 
-		VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`, d.Message, d.Topic, d.Radius, d.Latitude, d.Longitude, expirationTime).Scan(&msgID)
+	if deliverySemantic != "at-least-once" {
+
+		_, found = requests[message.RequestID]
+	}
 
 	variable := "fail"
 
-	if err == nil {
+	if deliverySemantic == "at-least-once" || !found {
 
-		ch := make(chan bool)
+		expirationTime := time.Now().Local().Add(time.Minute * time.Duration(message.LifeTime))
 
-		go func() {
-			ch <- r.publishTo(d.Topic, d.Message, d.Radius, expirationTime, fmt.Sprintf("%f", d.Latitude), fmt.Sprintf("%f", d.Longitude))
-		}()
+		var msgID int
+		err = r.dbServer.db.QueryRow(`INSERT INTO messages (payload, topic, radius, latitude, longitude, lifetime) 
+		VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`, message.Message, message.Topic, message.Radius, message.Latitude, message.Longitude, expirationTime).Scan(&msgID)
 
-		checked := <-ch
+		if err == nil {
 
-		if checked {
+			ch := make(chan bool)
 
-			variable = "success"
+			go func() {
+				ch <- r.publishTo(message.Topic, message.Message, message.Radius, expirationTime, fmt.Sprintf("%f", message.Latitude), fmt.Sprintf("%f", message.Longitude))
+			}()
 
-		} else {
+			checked := <-ch
 
-			sqlStatement := `DELETE FROM messages WHERE id = $1`
+			if checked {
 
-			_, err := r.dbServer.db.Exec(sqlStatement, msgID)
+				variable = "success"
 
-			if err != nil {
-				panic(err)
+				if deliverySemantic != "at-least-once" {
+					message.InsertionTime = time.Now().Local()
+					requests[message.RequestID] = message
+				}
+
+			} else {
+
+				sqlStatement := `DELETE FROM messages WHERE id = $1`
+
+				_, err := r.dbServer.db.Exec(sqlStatement, msgID)
+
+				if err != nil {
+					panic(err)
+				}
+
+				variable = "fail"
 			}
-
-			variable = "fail"
 		}
+
+	} else {
+
+		variable = "success"
 	}
 
 	result, _ := json.Marshal(variable)
@@ -444,6 +492,7 @@ func main() {
 	r.initEB()
 
 	go r.garbageCollection()
+	go requestsRemoval()
 
 	router.StaticFS("/static/", http.Dir("../static"))
 	router.LoadHTMLGlob("../templates/*")
@@ -460,6 +509,7 @@ func main() {
 	router.POST("/publish", TokenAuthMiddleware(), r.publish)
 	router.POST("/editSubscription", TokenAuthMiddleware(), r.editSubscription)
 	router.POST("/notifications", TokenAuthMiddleware(), r.notifications)
+	router.POST("/removeRequest", TokenAuthMiddleware(), removeRequest)
 
 	log.Println("Listening on :8080...")
 	err := router.Run(":8080")
