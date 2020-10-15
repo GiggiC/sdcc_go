@@ -18,8 +18,6 @@ function getPositionAtLeastOnce(position) {
         }),
         success: function (data) {
             if (data === "fail") {
-                console.log(this.timeout)
-
                 $.ajax(this);
             } else {
                 alert("Message Published!");
@@ -27,7 +25,6 @@ function getPositionAtLeastOnce(position) {
             }
         },
         error: function (jqXHR, textStatus) {
-            console.log(this.timeout)
             if (textStatus === 'timeout') {
                 $.ajax(this);
             }

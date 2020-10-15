@@ -79,9 +79,9 @@
                         var table = $('#table');
                         table.empty()
                         var tblHeader = "<table id=\"example\" class=\"table table-striped\"><thead><tr>";
-                        var i = 1;
+                        var i = 0;
                         for (var k in result[0]) {
-                            if (i < 3) {
+                            if (i < 2) {
                                 tblHeader += "<th>" + k + "</th>";
                             }
                             i += 1;
@@ -94,7 +94,6 @@
                             $.each(value, function (key, val) {
                                 if (i === 0) {
                                     message = val
-                                    console.log(message)
                                 }
                                 if (i === 1) {
                                     TableRow += "<td data-toggle=\"modal\" data-target=\"#exampleModalCenter\" onclick=\"modal('" + message + "')\"><a href='#'> " + val + "</a></td>";

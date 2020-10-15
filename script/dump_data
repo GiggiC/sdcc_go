@@ -54,7 +54,8 @@ CREATE TABLE public.messages (
     radius integer,
     latitude text,
     longitude text,
-    lifetime timestamp without time zone
+    lifetime timestamp without time zone,
+    title text
 );
 
 
@@ -128,12 +129,26 @@ ALTER TABLE ONLY public.messages ALTER COLUMN id SET DEFAULT nextval('public.mes
 -- Data for Name: messages; Type: TABLE DATA; Schema: public; Owner: postgres
 --
 
+INSERT INTO public.messages VALUES ('tt', 'Elettronica', 357, 67, '41.8480128', '12.887654399999999', '2020-10-14 23:07:16.939714', 'tt');
+INSERT INTO public.messages VALUES ('proca', 'Elettronica', 358, 56, '41.8480128', '12.887654399999999', '2020-10-14 23:02:18.019628', 'tit');
+INSERT INTO public.messages VALUES ('aaaaaaaa', 'Elettronica', 359, 67, '41.8480128', '12.887654399999999', '2020-10-14 23:16:38.567944', 'ttttt');
+INSERT INTO public.messages VALUES ('fsfsdf
+sdfsdf', 'Elettronica', 360, 78, '41.8480128', '12.887654399999999', '2020-10-15 10:58:07.921704', 'tertert');
+INSERT INTO public.messages VALUES ('erer
+erer', 'Elettronica', 361, 67, '41.8480128', '12.887654399999999', '2020-10-14 23:19:29.609082', 'titolone');
+INSERT INTO public.messages VALUES ('sdsdf                        ', 'Elettronica', 362, 78, '41.8480128', '12.887654399999999', '2020-10-14 23:52:52.476388', 'yyyy');
+INSERT INTO public.messages VALUES ('terter    111      ert', 'Elettronica', 363, 78, '41.8480128', '12.887654399999999', '2020-10-14 23:53:26.336522', 'wqwwdr');
 
 
 --
 -- Data for Name: subscriptions; Type: TABLE DATA; Schema: public; Owner: postgres
 --
 
+INSERT INTO public.subscriptions VALUES ('l.corsi@hotmail.it', 'Animali');
+INSERT INTO public.subscriptions VALUES ('l.corsi@hotmail.it', 'Casa');
+INSERT INTO public.subscriptions VALUES ('l.corsi@hotmail.it', 'Elettrodomestici');
+INSERT INTO public.subscriptions VALUES ('l.corsi@hotmail.it', 'Arredamento');
+INSERT INTO public.subscriptions VALUES ('l.corsi@hotmail.it', 'Elettronica');
 
 
 --
@@ -156,6 +171,7 @@ INSERT INTO public.topics VALUES ('Offerte di lavoro');
 INSERT INTO public.topics VALUES ('Auto');
 INSERT INTO public.topics VALUES ('Moto');
 INSERT INTO public.topics VALUES ('Casa');
+INSERT INTO public.topics VALUES ('Videogames');
 
 
 --
@@ -170,7 +186,7 @@ INSERT INTO public.users VALUES ('leonardo_petraglia@hotmail.it', '$2a$10$/4L461
 -- Name: messages_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
 --
 
-SELECT pg_catalog.setval('public.messages_id_seq', 353, true);
+SELECT pg_catalog.setval('public.messages_id_seq', 363, true);
 
 
 --
