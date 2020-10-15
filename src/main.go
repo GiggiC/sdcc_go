@@ -12,6 +12,7 @@ import (
 	"log"
 	"math/rand"
 	"net/http"
+	"os"
 	"strconv"
 	"sync"
 	"time"
@@ -518,6 +519,14 @@ func main() {
 	go r.garbageCollection()
 	go requestsRemoval()
 
+	logFile, err := os.OpenFile("../log/server.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	router.Use(gin.LoggerWithWriter(logFile))
+
 	router.StaticFS("/static/", http.Dir("../static"))
 	router.LoadHTMLGlob("../templates/*")
 
@@ -536,7 +545,7 @@ func main() {
 	router.POST("/removeRequest", TokenAuthMiddleware(), removeRequest)
 
 	log.Println("Listening on :8080...")
-	err := router.Run(":8080")
+	err = router.Run(":8080")
 
 	if err != nil {
 
