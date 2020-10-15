@@ -81,7 +81,7 @@
                         var tblHeader = "<table id=\"example\" class=\"table table-striped\"><thead><tr>";
                         var i = 0;
                         for (var k in result[0]) {
-                            if (i < 2) {
+                            if (i < 2 && k !== "Message") {
                                 tblHeader += "<th>" + k + "</th>";
                             }
                             i += 1;
