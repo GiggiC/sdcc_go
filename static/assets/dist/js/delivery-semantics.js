@@ -11,7 +11,7 @@ function getPositionAtLeastOnce(position) {
     $.ajax({
         type: "POST",
         url: "/publish",
-        timeout: $('#deliveryTimeout'),
+        timeout: $('#deliveryTimeout').val(),
         data: JSON.stringify({
             Message: message, Topic: topic, Title: title, Radius: radius, LifeTime: lifeTime,
             Latitude: latitude, Longitude: longitude
@@ -49,7 +49,7 @@ function getPositionAtMostOnce(position) {
     $.ajax({
         type: "POST",
         url: "/publish",
-        timeout: $('#deliveryTimeout'),
+        timeout: $('#deliveryTimeout').val(),
         tryCount: 0,
         retryLimit: $('#retryLimit'),
         data: JSON.stringify({
@@ -92,7 +92,7 @@ function getPositionExactlyOnce(position) {
     $.ajax({
         type: "POST",
         url: "/publish",
-        timeout: $('#deliveryTimeout'),
+        timeout: $('#deliveryTimeout').val(),
         data: JSON.stringify({
             Message: message, Topic: topic, Title: title, Radius: radius, LifeTime: lifeTime,
             Latitude: latitude, Longitude: longitude, RequestID: id
