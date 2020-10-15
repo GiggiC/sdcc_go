@@ -25,6 +25,7 @@ function getPositionAtLeastOnce(position) {
             }
         },
         error: function (jqXHR, textStatus) {
+            console.log(this.timeout)
             if (textStatus === 'timeout') {
                 $.ajax(this);
             }
@@ -49,7 +50,7 @@ function getPositionAtMostOnce(position) {
     $.ajax({
         type: "POST",
         url: "/publish",
-        timeout: $('deliveryTimeout'),
+        timeout: $('#deliveryTimeout'),
         tryCount: 0,
         retryLimit: $('#retryLimit'),
         data: JSON.stringify({
