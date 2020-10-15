@@ -18,6 +18,8 @@ function getPositionAtLeastOnce(position) {
         }),
         success: function (data) {
             if (data === "fail") {
+                console.log(this.timeout)
+
                 $.ajax(this);
             } else {
                 alert("Message Published!");
