@@ -98,7 +98,6 @@ function getPositionExactlyOnce(position) {
             Latitude: latitude, Longitude: longitude, RequestID: id
         }),
         success: function (data) {
-            console.log(this.timeout)
             if (data === "fail") {
                 $.ajax(this);
             } else {
@@ -115,7 +114,6 @@ function getPositionExactlyOnce(position) {
         },
         error: function (jqXHR, textStatus) {
             if (textStatus === 'timeout') {
-                console.log(this.timeout)
                 $.ajax(this);
             }
         }
