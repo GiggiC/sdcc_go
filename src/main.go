@@ -51,7 +51,7 @@ type Receivers struct {
 }
 
 var requests = make(map[string]DataEvent)
-var p = properties.MustLoadFile("../conf.properties", properties.UTF8)
+var p = properties.MustLoadFile("conf.properties", properties.UTF8)
 var deliverySemantic = p.GetString("delivery-semantic", "at-least-once")
 var retryLimit = p.GetInt("retry-limit", 5)
 var deliveryTimeout = p.GetInt("delivery-timeout", 3000)
