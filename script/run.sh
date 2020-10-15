@@ -1,2 +1,2 @@
 #!/bin/bash
-go run *.go
+go run ../src/*.go
