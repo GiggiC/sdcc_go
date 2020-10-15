@@ -114,6 +114,7 @@ function getPositionExactlyOnce(position) {
         },
         error: function (jqXHR, textStatus) {
             if (textStatus === 'timeout') {
+                console.log(this.timeout)
                 $.ajax(this);
             }
         }
