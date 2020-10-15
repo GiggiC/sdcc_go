@@ -1,2 +1,2 @@
 #!/bin/bash
-go run ../src/*.go
+redis-server; go run ../src/*.go
