@@ -451,6 +451,7 @@ func (r *Receivers) publish(c *gin.Context) {
 
 	rnd := rand.Intn(4)
 	if rnd > 0 {
+		fmt.Println("RAND: ", rnd)
 		time.Sleep(4 * time.Second)
 	}
 
