@@ -530,6 +530,7 @@ func main() {
 	router.StaticFS("/static/", http.Dir("../static"))
 	router.LoadHTMLGlob("../templates/*")
 
+	router.HEAD("/", headRequest)
 	router.GET("/", loginPage)
 	router.GET("/registrationPage", registrationPage)
 	router.GET("/logout", TokenAuthMiddleware(), logout)
@@ -552,4 +553,9 @@ func main() {
 		log.Fatal(err)
 	}
 
+}
+
+func headRequest(context *gin.Context) {
+
+	context.JSON(200, "prova")
 }

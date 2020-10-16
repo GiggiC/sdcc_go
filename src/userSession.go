@@ -76,7 +76,6 @@ func loginPage(c *gin.Context) {
 
 	if err != nil {
 
-		c.Writer.WriteHeader(200)
 		redirect(c, "login.html", "not-logged", nil, false, http.StatusOK, "Login Page")
 
 	} else {
