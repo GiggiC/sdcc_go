@@ -10,7 +10,6 @@ import (
 	"github.com/magiconair/properties"
 	"github.com/umahmood/haversine"
 	"log"
-	"math/rand"
 	"net/http"
 	"os"
 	"strconv"
@@ -452,11 +451,11 @@ func (r *Receivers) publish(c *gin.Context) {
 		variable = "success"
 	}
 
-	rnd := rand.Intn(4)
+	/*rnd := rand.Intn(4)
 	if rnd > 0 {
 		fmt.Println("RAND: ", rnd)
 		time.Sleep(6 * time.Second)
-	}
+	}*/
 
 	result, _ := json.Marshal(variable)
 	c.Writer.Header().Set("Content-Type", "application/json")
