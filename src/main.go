@@ -388,6 +388,8 @@ func (r *Receivers) publish(c *gin.Context) {
 
 	//checkSession(c)
 
+	fmt.Println(c.Request.Body)
+
 	var message DataEvent
 	err := json.NewDecoder(c.Request.Body).Decode(&message)
 
