@@ -52,9 +52,9 @@ type Receivers struct {
 
 var requests = make(map[string]DataEvent)
 var p = properties.MustLoadFile("../conf.properties", properties.UTF8)
-var deliverySemantic = p.GetString("delivery-semantic", "at-least-once")
+var deliverySemantic = p.GetString("delivery-semantic", "exactly-once")
 var retryLimit = p.GetInt("retry-limit", 5)
-var deliveryTimeout = p.GetInt("delivery-timeout", 3000)
+var deliveryTimeout = p.GetInt("delivery-timeout", 100)
 var eliminationPeriod = p.GetInt("elimination-period", 1)
 var requestLifetime = p.GetInt("request-lifetime", 2)
 var garbageCollectorPeriod = p.GetInt("garbage-collector-period", 1)
