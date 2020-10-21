@@ -387,7 +387,8 @@ func (r *Receivers) publish(c *gin.Context) {
 
 	//checkSession(c)
 
-	fmt.Println(c.Request.Body)
+	fmt.Println(deliverySemantic)
+	fmt.Println(deliveryTimeout)
 
 	var message DataEvent
 	err := json.NewDecoder(c.Request.Body).Decode(&message)
