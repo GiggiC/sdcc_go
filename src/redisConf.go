@@ -14,7 +14,8 @@ func initRedis() {
 	dsn := os.Getenv("REDIS_DSN")
 
 	if len(dsn) == 0 {
-		dsn = "localhost:6379"
+		//dsn = "localhost:6379"
+		dsn = "18.211.56.181:6379"
 	}
 
 	client = redis.NewClient(&redis.Options{
