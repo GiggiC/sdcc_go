@@ -138,6 +138,8 @@ func (s *server) login(c *gin.Context) {
 		Value:   ts.AccessToken,
 		Expires: time.Now().Local().Add(time.Minute * 15),
 	})
+
+	c.JSON(http.StatusOK, ts.AccessToken)
 }
 
 func logout(c *gin.Context) {
