@@ -2,6 +2,7 @@ package main
 
 import (
 	"database/sql"
+	"fmt"
 	"github.com/gin-gonic/gin"
 	"golang.org/x/crypto/bcrypt"
 	"net/http"
@@ -162,9 +163,13 @@ func checkSession(c *gin.Context) {
 
 	if exErr != nil || fErr != nil {
 
+		fmt.Println("Dentro checkSession err")
 		redirect(c, "login.html", "not-logged", nil, false, http.StatusUnauthorized, "Login Page")
 		c.Abort()
 	}
+
+	fmt.Println("Dentro checkSession: ", exErr, " ", fErr, " ", tokenAuth)
+
 }
 
 func redirect(c *gin.Context, url string, status string, results interface{}, check bool, code int, title string) {
