@@ -44,6 +44,9 @@
                 type: "POST",
                 url: "/editSubscription",
                 data: JSON.stringify({topic: topic}),
+                error: function () {
+                    window.location.href = '/'
+                }
             })
         }
     </script>
