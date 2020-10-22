@@ -385,10 +385,7 @@ func (r *Receivers) publishPage(c *gin.Context) {
 
 func (r *Receivers) publish(c *gin.Context) {
 
-	//checkSession(c)
-
-	fmt.Println(deliverySemantic)
-	fmt.Println(deliveryTimeout)
+	checkSession(c)
 
 	var message DataEvent
 	err := json.NewDecoder(c.Request.Body).Decode(&message)
@@ -541,7 +538,7 @@ func main() {
 
 	router.POST("/login", s.login)
 	router.POST("/registration", s.registration)
-	router.POST("/publish", r.publish)
+	router.POST("/publish", TokenAuthMiddleware(), r.publish)
 	router.POST("/editSubscription", TokenAuthMiddleware(), r.editSubscription)
 	router.POST("/notifications", TokenAuthMiddleware(), r.notifications)
 	router.POST("/removeRequest", TokenAuthMiddleware(), removeRequest)

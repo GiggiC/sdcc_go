@@ -63,8 +63,6 @@ func VerifyToken(c *gin.Context) (*jwt.Token, error) {
 
 	tokenString := ExtractToken(c)
 
-	fmt.Println("Dentro Verify Token: ", tokenString)
-
 	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
 
 		//Make sure that the token method conform to "SigningMethodHMAC"
@@ -78,7 +76,6 @@ func VerifyToken(c *gin.Context) (*jwt.Token, error) {
 
 	if err != nil {
 
-		fmt.Println("Dentro Verify Error")
 		return nil, err
 	}
 
@@ -105,11 +102,9 @@ func TokenValid(c *gin.Context) error {
 func ExtractToken(c *gin.Context) string {
 
 	accessToken, err := c.Request.Cookie("access_token")
-	fmt.Println("Dentro Access Token")
 
 	if err != nil || accessToken.Value == "" {
 
-		fmt.Println("Dentro Access Token Error")
 		return ""
 	}
 
@@ -120,11 +115,8 @@ func ExtractTokenMetadata(c *gin.Context) (*AccessDetails, error) {
 
 	token, err := VerifyToken(c)
 
-	fmt.Println("Dentro Extract Token Metadata: ", token, " ", err)
-
 	if err != nil {
 
-		fmt.Println("Dentro Extract Token Meta, err 127")
 		return nil, err
 	}
 
@@ -136,13 +128,10 @@ func ExtractTokenMetadata(c *gin.Context) (*AccessDetails, error) {
 
 		if !ok {
 
-			fmt.Println("Dentro Extract Token Meta, err 139")
 			return nil, err
 		}
 
 		email := fmt.Sprint(claims["email"])
-
-		fmt.Println("Dentro Extract Token Meta, err 144: ", accessUuid, " ", email)
 
 		return &AccessDetails{
 			AccessUuid: accessUuid,
@@ -150,19 +139,14 @@ func ExtractTokenMetadata(c *gin.Context) (*AccessDetails, error) {
 		}, nil
 	}
 
-	fmt.Println("Dentro Extract Token Meta, err 152")
-
 	return nil, err
 }
 
 func FetchAuth(authD *AccessDetails) error {
 
-	fmt.Println("Dentro FetchAuth")
-
 	_, err := client.Get(ctx, authD.AccessUuid).Result()
 
 	if err != nil {
-		fmt.Println("Dentro FetchAuth err")
 		return err
 	}
 

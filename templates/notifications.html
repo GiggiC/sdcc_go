@@ -109,6 +109,9 @@
                         $("#example").DataTable();
                     }
                 },
+                error: function () {
+                    window.location.href = '/'
+                }
             })
         }
 

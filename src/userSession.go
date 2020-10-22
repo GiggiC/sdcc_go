@@ -2,7 +2,7 @@ package main
 
 import (
 	"database/sql"
-	"fmt"
+	"encoding/json"
 	"github.com/gin-gonic/gin"
 	"golang.org/x/crypto/bcrypt"
 	"net/http"
@@ -12,6 +12,11 @@ import (
 type AccessDetails struct {
 	AccessUuid string
 	Email      string
+}
+
+type LoginDetails struct {
+	Email    string `json:"Email"`
+	Password string `json:"Password"`
 }
 
 func registrationPage(c *gin.Context) {
@@ -87,13 +92,17 @@ func loginPage(c *gin.Context) {
 
 func (s *server) login(c *gin.Context) {
 
-	email := c.Request.FormValue("email")
-	password := c.Request.FormValue("password")
+	var user LoginDetails
+	err := json.NewDecoder(c.Request.Body).Decode(&user)
+
+	if err != nil {
+		panic(err)
+	}
 
 	var databaseEmail string
 	var databasePassword string
 
-	err := s.db.QueryRow("SELECT email, password FROM users WHERE email=$1", email).Scan(&databaseEmail, &databasePassword)
+	err = s.db.QueryRow("SELECT email, password FROM users WHERE email=$1", user.Email).Scan(&databaseEmail, &databasePassword)
 
 	if err != nil {
 
@@ -101,7 +110,7 @@ func (s *server) login(c *gin.Context) {
 		return
 	}
 
-	err = bcrypt.CompareHashAndPassword([]byte(databasePassword), []byte(password))
+	err = bcrypt.CompareHashAndPassword([]byte(databasePassword), []byte(user.Password))
 
 	if err != nil {
 
@@ -109,7 +118,7 @@ func (s *server) login(c *gin.Context) {
 		return
 	}
 
-	ts, err := CreateToken(email)
+	ts, err := CreateToken(user.Email)
 
 	if err != nil {
 
@@ -117,7 +126,7 @@ func (s *server) login(c *gin.Context) {
 		return
 	}
 
-	saveErr := CreateAuth(email, ts)
+	saveErr := CreateAuth(user.Email, ts)
 
 	if saveErr != nil {
 		redirect(c, "login.html", "not-logged", nil, false, http.StatusUnprocessableEntity, "Login Page")
@@ -129,9 +138,6 @@ func (s *server) login(c *gin.Context) {
 		Value:   ts.AccessToken,
 		Expires: time.Now().Local().Add(time.Minute * 15),
 	})
-
-	redirect(c, "notifications.html", "logged", nil, false, http.StatusOK, "Notifications")
-
 }
 
 func logout(c *gin.Context) {
@@ -163,13 +169,9 @@ func checkSession(c *gin.Context) {
 
 	if exErr != nil || fErr != nil {
 
-		fmt.Println("Dentro checkSession err")
 		redirect(c, "login.html", "not-logged", nil, false, http.StatusUnauthorized, "Login Page")
 		c.Abort()
 	}
-
-	fmt.Println("Dentro checkSession: ", exErr, " ", fErr, " ", tokenAuth)
-
 }
 
 func redirect(c *gin.Context, url string, status string, results interface{}, check bool, code int, title string) {
