@@ -19,7 +19,8 @@ func initRedis() {
 	}
 
 	client = redis.NewClient(&redis.Options{
-		Addr: dsn,
+		Addr:     dsn,
+		Password: "empires",
 	})
 
 	_, err := client.Ping(ctx).Result()
