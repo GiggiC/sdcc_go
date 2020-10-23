@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
@@ -296,7 +297,16 @@ func (s *server) subscriptionPage(c *gin.Context) {
 		results = append(results, tRes)
 	}
 
-	redirect(c, "subscribe.html", "logged", results, true, http.StatusOK, "Subscription Page")
+	userAgent := c.Request.Header.Get("User-Agent")
+
+	if strings.Contains(userAgent, "curl") {
+
+		c.JSON(http.StatusOK, results)
+
+	} else {
+
+		redirect(c, "subscribe.html", "logged", results, true, http.StatusOK, "Subscription Page")
+	}
 }
 
 func (r *Receivers) editSubscription(c *gin.Context) {
@@ -324,6 +334,14 @@ func (r *Receivers) editSubscription(c *gin.Context) {
 		r.topicUnsubscription(email, d.Topic)
 		_, err := r.dbServer.db.Exec(sqlStatement, email, d.Topic)
 
+		userAgent := c.Request.Header.Get("User-Agent")
+
+		if strings.Contains(userAgent, "curl") {
+
+			message := "Unsubscribed from " + d.Topic
+			c.JSON(http.StatusOK, message)
+		}
+
 		if err != nil {
 			panic(err)
 		}
@@ -334,6 +352,14 @@ func (r *Receivers) editSubscription(c *gin.Context) {
 
 		r.topicSubscription(d.Topic, email)
 		_, err := r.dbServer.db.Exec(sqlStatement, email, d.Topic)
+
+		userAgent := c.Request.Header.Get("User-Agent")
+
+		if strings.Contains(userAgent, "curl") {
+
+			message := "Subscribed to " + d.Topic
+			c.JSON(http.StatusOK, message)
+		}
 
 		if err != nil {
 			panic(err)

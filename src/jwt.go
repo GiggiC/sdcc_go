@@ -7,6 +7,7 @@ import (
 	"github.com/twinj/uuid"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 )
 
@@ -171,7 +172,17 @@ func TokenAuthMiddleware() gin.HandlerFunc {
 
 		if err != nil {
 
-			redirect(c, "login.html", "not-logged", nil, false, http.StatusUnauthorized, "Login Page")
+			userAgent := c.Request.Header.Get("User-Agent")
+
+			if strings.Contains(userAgent, "curl") {
+
+				c.JSON(http.StatusUnauthorized, "Status Unauthorized")
+
+			} else {
+
+				redirect(c, "login.html", "not-logged", nil, false, http.StatusUnauthorized, "Login Page")
+			}
+
 			c.Abort()
 			return
 		}

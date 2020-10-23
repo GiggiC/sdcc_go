@@ -35,45 +35,43 @@ func registrationPage(c *gin.Context) {
 
 func (s *server) registration(c *gin.Context) {
 
-	password := c.Request.FormValue("password")
-	email := c.Request.FormValue("email")
+	var user LoginDetails
+	err := json.NewDecoder(c.Request.Body).Decode(&user)
 
-	var user string
+	if err != nil {
+		panic(err)
+	}
 
-	err := s.db.QueryRow("SELECT email FROM users WHERE email=$1", email).Scan(&user)
+	err = s.db.QueryRow("SELECT email FROM users WHERE email=$1", user.Email).Scan(&user)
 
-	switch {
+	variable := "success"
 
-	case err == sql.ErrNoRows:
+	if err == sql.ErrNoRows {
 
-		hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+		hashedPassword, errPass := bcrypt.GenerateFromPassword([]byte(user.Password), bcrypt.DefaultCost)
 
-		if err != nil {
-
-			redirect(c, "registration.html", "not-logged", nil, false, http.StatusInternalServerError, "Registration Page")
+		if errPass != nil {
+			variable = "Password Generation Error!"
+			panic(errPass)
 		}
 
 		sqlStatement := `INSERT INTO users (email, password) VALUES ($1, $2)`
 
-		_, err = s.db.Exec(sqlStatement, email, hashedPassword)
+		_, errDB := s.db.Exec(sqlStatement, user.Email, hashedPassword)
 
-		if err != nil {
-			panic(err)
+		if errDB != nil {
+			variable = "Internal Server Error!"
+			panic(errDB)
 		}
 
-		redirect(c, "login.html", "not-logged", nil, false, http.StatusOK, "Login Page")
-		return
+	} else {
 
-	case err != nil:
-
-		redirect(c, "registrationError.html", "not-logged", nil, false, http.StatusInternalServerError, "Registration Error")
-		return
-
-	default:
-
-		redirect(c, "registrationError.html", "not-logged", nil, false, http.StatusInternalServerError, "Registration Error") //TODO general error
-		return
+		variable = "User Already Exists!"
 	}
+
+	result, _ := json.Marshal(variable)
+	c.Writer.Header().Set("Content-Type", "application/json")
+	_, err = c.Writer.Write(result)
 }
 
 func loginPage(c *gin.Context) {

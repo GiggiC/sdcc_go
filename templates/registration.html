@@ -16,27 +16,27 @@
 
                     <article class="card-body">
 
-                            <div class="form-group">
-                                <label for="email">Email address</label>
-                                <input type="email" class="form-control" placeholder="Email" name="email" id="email"
-                                       required>
-                            </div>
+                        <div class="form-group">
+                            <label for="email">Email address</label>
+                            <input type="email" class="form-control" placeholder="Email" name="email" id="email"
+                                   required>
+                        </div>
 
-                            <div class="form-group">
-                                <label for="password">Create password</label>
-                                <input class="form-control" type="password" name="password" id="password" minlength="6"
-                                       placeholder="Password" required>
-                            </div>
+                        <div class="form-group">
+                            <label for="password">Create password</label>
+                            <input class="form-control" type="password" name="password" id="password" minlength="6"
+                                   placeholder="Password" required>
+                        </div>
 
-                            <div class="form-group">
-                                <label for="confirmed-password">Confirm password</label>
-                                <input class="form-control" type="password" name="confirmed" id="confirmed-password"
-                                       minlength="6" placeholder="Confirm Password" required oninput="check(this)">
-                            </div>
+                        <div class="form-group">
+                            <label for="confirmed-password">Confirm password</label>
+                            <input class="form-control" type="password" name="confirmed" id="confirmed-password"
+                                   minlength="6" placeholder="Confirm Password" required>
+                        </div>
 
-                            <div class="form-group">
-                                <button class="btn btn-lg btn-primary btn-block" onclick="registration()">Sign Up</button>
-                            </div>
+                        <div class="form-group">
+                            <button class="btn btn-lg btn-primary btn-block" onclick="registration()">Sign Up</button>
+                        </div>
 
                     </article>
 
@@ -52,33 +52,43 @@
 </main>
 
 <script>
-    function check(input) {
-        if (input.value !== $('#password').val()) {
-            input.setCustomValidity('Password Must be Matching.');
-        } else {
-            input.setCustomValidity('');
+    function check() {
+        if ($('#confirmed-password').val() !== $('#password').val()) {
+            alert("Password Must Be Matching!")
+            return false
         }
+        return true
     }
 
-    $(document).keydown(function(e){
+    $(document).keydown(function (e) {
         if (e.keyCode === 13) {
+            check()
             registration();
         }
     });
 
     function registration() {
 
-        var email = $('#email').val()
-        var password = $('#password').val()
+        if (check()) {
 
-        $.ajax({
-            type: "POST",
-            url: "/registration",
-            data: JSON.stringify({Email: email, Password: password}),
-            success: function () {
-                window.location.href = '/registration'
-            }
-        })
+            var email = $('#email').val()
+            var password = $('#password').val()
+
+            $.ajax({
+                type: "POST",
+                url: "/registration",
+                data: JSON.stringify({Email: email, Password: password}),
+                success: function (variable) {
+                    if (variable === "success") {
+                        alert("Registration Successful!")
+                        window.location.href = '/'
+                    } else {
+                        alert(variable)
+                        window.location.href = '/registrationPage'
+                    }
+                }
+            })
+        }
     }
 </script>
 
