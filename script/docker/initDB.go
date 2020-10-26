@@ -35,23 +35,26 @@ func main() {
 
 	db := initDB()
 
-	file, err := ioutil.ReadFile("/home/luigi/go/sdcc_go/script/sdcc.sql")
+	file, err := ioutil.ReadFile("/home/luigi/go/sdcc_go/script/docker/sdcc.sql")
 
 	if err != nil {
-		panic(err)
+		fmt.Println(err)
 	}
 
 	requests := strings.Split(string(file), ";")
 
 	for _, request := range requests {
 
-		_, err := db.Exec(request)
+		_, err = db.Exec(request)
 
 		if err != nil {
-			db.Close()
-			panic(err)
+			fmt.Println(err)
 		}
 	}
 
-	db.Close()
+	err = db.Close()
+
+	if err != nil {
+		fmt.Println(err)
+	}
 }
