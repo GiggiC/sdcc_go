@@ -2,7 +2,6 @@
 package main
 
 import (
-	"database/sql"
 	"encoding/json"
 	"fmt"
 	"github.com/gin-gonic/gin"
@@ -40,9 +39,11 @@ type DataEventSlice []DataEvent
 
 type Topics []string
 
+var GlobalTopics Topics
+
 type EventBus struct {
 	topicMessages map[string]DataEventSlice //key: topic - value: messages
-	userTopics    map[string]Topics         //key: topic - value: users
+	userTopics    map[string]Topics         //key: user  - value: topics
 	rm            sync.RWMutex
 }
 
@@ -53,6 +54,7 @@ type Receivers struct {
 
 var requests = make(map[string]DataEvent)
 var p = properties.MustLoadFile("../conf.properties", properties.UTF8)
+var dbPersistence = p.GetBool("db-persistence", true)
 var deliverySemantic = p.GetString("delivery-semantic", "exactly-once")
 var retryLimit = p.GetInt("retry-limit", 5)
 var deliveryTimeout = p.GetInt("delivery-timeout", 100)
@@ -195,7 +197,11 @@ func (r *Receivers) garbageCollection() {
 		for topic := range r.eb.topicMessages {
 
 			go func() {
-				r.deleteMessageFromDB(topic) //TODO daily delay
+
+				if dbPersistence {
+					r.deleteMessageFromDB(topic) //TODO daily delay
+				}
+
 				r.deleteMessageFromQueue(topic)
 			}()
 		}
@@ -215,6 +221,15 @@ func checkDistance(x1 float64, x2 float64, y1 float64, y2 float64, r1 int, r2 in
 	}
 
 	return true
+}
+
+func stringInSlice(a string, list []string) bool {
+	for _, b := range list {
+		if b == a {
+			return true
+		}
+	}
+	return false
 }
 
 func notificationsPage(c *gin.Context) {
@@ -258,40 +273,33 @@ func (r *Receivers) notifications(c *gin.Context) {
 	}
 }
 
-func (s *server) subscriptionPage(c *gin.Context) {
+func (r *Receivers) subscriptionPage(c *gin.Context) {
 
 	checkSession(c)
 
 	ad, _ := ExtractTokenMetadata(c)
 	email := ad.Email
-
-	data, err := s.db.Query("SELECT topic FROM subscriptions WHERE subscriber = $1", email)
-
-	if err != nil {
-		panic(err)
-	}
+	subscribed := r.eb.userTopics[email]
 
 	tRes := Topic{}
 	var results []Topic
 
-	for data.Next() {
-		var name string
-		_ = data.Scan(&name)
-		tRes.Name = name
+	for _, topic := range subscribed {
+		tRes.Name = topic
 		tRes.Flag = true
 		results = append(results, tRes)
 	}
 
-	data, err = s.db.Query("select t.name from topics t where t.name "+
+	noSubscribed, err := r.dbServer.db.Query("select t.name from topics t where t.name "+
 		"not in (select s.topic from subscriptions s where s.subscriber = $1)", email)
 
 	if err != nil {
 		panic(err)
 	}
 
-	for data.Next() {
+	for noSubscribed.Next() {
 		var name string
-		_ = data.Scan(&name)
+		_ = noSubscribed.Scan(&name)
 		tRes.Name = name
 		tRes.Flag = false
 		results = append(results, tRes)
@@ -316,58 +324,58 @@ func (r *Receivers) editSubscription(c *gin.Context) {
 	ad, _ := ExtractTokenMetadata(c)
 	email := ad.Email
 
-	var d DataEvent
-	err := json.NewDecoder(c.Request.Body).Decode(&d)
+	var dataEvent DataEvent
+	err := json.NewDecoder(c.Request.Body).Decode(&dataEvent)
 
 	if err != nil {
 		panic(err)
 	}
 
-	err = r.dbServer.db.QueryRow("select topic from subscriptions where subscriber = $1 and topic = $2", email, d.Topic).Scan()
+	subscriptions := r.eb.userTopics[email]
 
-	switch {
+	if stringInSlice(dataEvent.Topic, subscriptions) {
 
-	case err != sql.ErrNoRows:
+		if dbPersistence {
 
-		sqlStatement := `DELETE FROM subscriptions WHERE subscriber = $1 AND topic = $2`
+			sqlStatement := `DELETE FROM subscriptions WHERE subscriber = $1 AND topic = $2`
+			_, err := r.dbServer.db.Exec(sqlStatement, email, dataEvent.Topic)
 
-		r.topicUnsubscription(email, d.Topic)
-		_, err := r.dbServer.db.Exec(sqlStatement, email, d.Topic)
+			if err != nil {
+				panic(err)
+			}
+		}
+
+		r.topicUnsubscription(email, dataEvent.Topic)
 
 		userAgent := c.Request.Header.Get("User-Agent")
 
 		if strings.Contains(userAgent, "curl") {
 
-			message := "Unsubscribed from " + d.Topic
+			message := "Unsubscribed from " + dataEvent.Topic
 			c.JSON(http.StatusOK, message)
 		}
 
-		if err != nil {
-			panic(err)
+	} else {
+
+		if dbPersistence {
+
+			sqlStatement := `INSERT INTO subscriptions (subscriber, topic) VALUES ($1, $2)`
+			_, err := r.dbServer.db.Exec(sqlStatement, email, dataEvent.Topic)
+
+			if err != nil {
+				panic(err)
+			}
 		}
 
-	case err == sql.ErrNoRows:
-
-		sqlStatement := `INSERT INTO subscriptions (subscriber, topic) VALUES ($1, $2)`
-
-		r.topicSubscription(d.Topic, email)
-		_, err := r.dbServer.db.Exec(sqlStatement, email, d.Topic)
+		r.topicSubscription(dataEvent.Topic, email)
 
 		userAgent := c.Request.Header.Get("User-Agent")
 
 		if strings.Contains(userAgent, "curl") {
 
-			message := "Subscribed to " + d.Topic
+			message := "Subscribed to " + dataEvent.Topic
 			c.JSON(http.StatusOK, message)
 		}
-
-		if err != nil {
-			panic(err)
-		}
-
-	default:
-
-		panic(err)
 	}
 }
 
@@ -375,24 +383,9 @@ func (r *Receivers) publishPage(c *gin.Context) {
 
 	checkSession(c)
 
-	data, err := r.dbServer.db.Query("SELECT name FROM topics ")
-
-	if err != nil {
-		panic(err)
-	}
-
-	var results []string
-
-	for data.Next() {
-		var topic string
-		_ = data.Scan(&topic)
-		results = append(results, topic)
-	}
-
-	var email string
-
 	ad, _ := ExtractTokenMetadata(c)
-	email = ad.Email
+	email := ad.Email
+	results := GlobalTopics
 
 	c.HTML(
 		http.StatusOK,
@@ -432,42 +425,55 @@ func (r *Receivers) publish(c *gin.Context) {
 	if deliverySemantic == "at-least-once" || !found {
 
 		expirationTime := time.Now().Local().Add(time.Minute * time.Duration(message.LifeTime))
-
 		var msgID int
-		err = r.dbServer.db.QueryRow(`INSERT INTO messages (payload, topic, radius, latitude, longitude, lifetime, title) 
-		VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`, message.Message, message.Topic, message.Radius, message.Latitude, message.Longitude, expirationTime, message.Title).Scan(&msgID)
 
-		if err == nil {
+		ch := make(chan bool)
 
-			ch := make(chan bool)
+		go func() {
+			ch <- r.publishTo(message.Topic, message.Title, message.Message, message.Radius, expirationTime, fmt.Sprintf("%f", message.Latitude),
+				fmt.Sprintf("%f", message.Longitude))
+		}()
 
-			go func() {
-				ch <- r.publishTo(message.Topic, message.Title, message.Message, message.Radius, expirationTime, fmt.Sprintf("%f", message.Latitude), fmt.Sprintf("%f", message.Longitude))
-			}()
+		checked := <-ch
 
-			checked := <-ch
+		if checked {
 
-			if checked {
+			if deliverySemantic != "at-least-once" {
+				message.InsertionTime = time.Now().Local()
+				requests[message.RequestID] = message
+			}
 
-				variable = "success"
+			if dbPersistence {
 
-				if deliverySemantic != "at-least-once" {
-					message.InsertionTime = time.Now().Local()
-					requests[message.RequestID] = message
+				err = r.dbServer.db.QueryRow(`INSERT INTO messages (payload, topic, radius, latitude, longitude, lifetime, title) 
+					VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`, message.Message, message.Topic, message.Radius, message.Latitude,
+					message.Longitude, expirationTime, message.Title).Scan(&msgID)
+
+				if err == nil {
+
+					variable = "success"
+
 				}
 
 			} else {
 
-				sqlStatement := `DELETE FROM messages WHERE id = $1`
+				variable = "success"
 
+			}
+
+		} else {
+
+			if dbPersistence {
+
+				sqlStatement := `DELETE FROM messages WHERE id = $1`
 				_, err := r.dbServer.db.Exec(sqlStatement, msgID)
 
 				if err != nil {
 					panic(err)
 				}
-
-				variable = "fail"
 			}
+
+			variable = "fail"
 		}
 
 	} else {
@@ -520,7 +526,17 @@ func (r *Receivers) initEB() {
 		r.topicSubscription(topic, subscriber)
 	}
 
-	return
+	data, err := r.dbServer.db.Query("SELECT name FROM topics ")
+
+	if err != nil {
+		panic(err)
+	}
+
+	for data.Next() {
+		var topic string
+		_ = data.Scan(&topic)
+		GlobalTopics = append(GlobalTopics, topic)
+	}
 }
 
 func main() {
@@ -559,7 +575,7 @@ func main() {
 	router.GET("/registrationPage", registrationPage)
 	router.GET("/logout", TokenAuthMiddleware(), logout)
 	router.GET("/publishPage", TokenAuthMiddleware(), r.publishPage)
-	router.GET("/subscriptionPage", TokenAuthMiddleware(), s.subscriptionPage)
+	router.GET("/subscriptionPage", TokenAuthMiddleware(), r.subscriptionPage)
 	router.GET("/notificationsPage", TokenAuthMiddleware(), notificationsPage)
 
 	router.POST("/login", s.login)
