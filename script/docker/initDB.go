@@ -1,13 +1,13 @@
+// main.go
 package main
 
 import (
 	"database/sql"
 	"fmt"
+	_ "github.com/lib/pq"
+	"io/ioutil"
+	"strings"
 )
-
-type server struct {
-	db *sql.DB
-}
 
 const (
 	host     = "172.21.0.2"
@@ -17,15 +17,7 @@ const (
 	dbname   = "sdcc"
 )
 
-/*const (
-	host     = "sdcc-db.c6fwapw2bm2k.us-east-1.rds.amazonaws.com"
-	port     = 5432
-	user     = "postgres"
-	password = "ElAmqMhwe82DonytfC1a"
-	dbname   = "postgres"
-)*/
-
-func initDB() (s *server, database *sql.DB) {
+func initDB() *sql.DB {
 
 	psqlInfo := fmt.Sprintf("host=%s port=%d user=%s "+
 		"password=%s dbname=%s sslmode=disable",
@@ -36,13 +28,30 @@ func initDB() (s *server, database *sql.DB) {
 		panic(err)
 	}
 
-	err = db.Ping()
+	return db
+}
+
+func main() {
+
+	db := initDB()
+
+	file, err := ioutil.ReadFile("/home/luigi/go/sdcc_go/script/sdcc.sql")
 
 	if err != nil {
 		panic(err)
 	}
 
-	fmt.Println("Successfully connected!")
+	requests := strings.Split(string(file), ";")
 
-	return &server{db: db}, db
+	for _, request := range requests {
+
+		_, err := db.Exec(request)
+
+		if err != nil {
+			db.Close()
+			panic(err)
+		}
+	}
+
+	db.Close()
 }

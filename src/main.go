@@ -55,7 +55,7 @@ type Receivers struct {
 var requests = make(map[string]DataEvent)
 var p = properties.MustLoadFile("../conf.properties", properties.UTF8)
 var dbPersistence = p.GetBool("db-persistence", true)
-var deliverySemantic = p.GetString("delivery-semantic", "exactly-once")
+var deliverySemantic = p.GetString("delivery-semantic", "at-least-once")
 var retryLimit = p.GetInt("retry-limit", 5)
 var deliveryTimeout = p.GetInt("delivery-timeout", 100)
 var eliminationPeriod = p.GetInt("elimination-period", 1)
@@ -137,7 +137,6 @@ func (r *Receivers) publishTo(topic string, title string, message string, radius
 func (r *Receivers) deleteMessageFromDB(topic string) {
 
 	sqlStatement := `DELETE FROM messages WHERE topic = $1 AND lifetime <= $2`
-
 	_, err := r.dbServer.db.Exec(sqlStatement, topic, time.Now().Local())
 
 	if err != nil {
@@ -199,7 +198,7 @@ func (r *Receivers) garbageCollection() {
 			go func() {
 
 				if dbPersistence {
-					r.deleteMessageFromDB(topic) //TODO daily delay
+					r.deleteMessageFromDB(topic)
 				}
 
 				r.deleteMessageFromQueue(topic)
@@ -224,11 +223,14 @@ func checkDistance(x1 float64, x2 float64, y1 float64, y2 float64, r1 int, r2 in
 }
 
 func stringInSlice(a string, list []string) bool {
+
 	for _, b := range list {
+
 		if b == a {
 			return true
 		}
 	}
+
 	return false
 }
 
@@ -592,5 +594,4 @@ func main() {
 
 		log.Fatal(err)
 	}
-
 }

@@ -149,8 +149,7 @@ func logout(c *gin.Context) {
 
 	if delErr != nil || deleted == 0 { //if any goes wrong
 
-		redirect(c, "login.html", "not-logged", nil, false, http.StatusUnauthorized, "Login Page") //TODO error
-		return
+		redirect(c, "login.html", "not-logged", nil, false, http.StatusUnauthorized, "Login Page")
 	}
 
 	http.SetCookie(c.Writer, &http.Cookie{
