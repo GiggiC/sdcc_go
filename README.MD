@@ -2,7 +2,7 @@
 
 Implementaion of a publish-subscribe message queue in Go language.
 
-##Prerequisites
+## Prerequisites
 
 To start the application you need to have docker and docker compose installed.
 
