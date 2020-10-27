@@ -10,7 +10,7 @@ type server struct {
 }
 
 const (
-	host     = "172.21.0.2"
+	host     = "172.28.1.3"
 	port     = 5432
 	user     = "postgres"
 	password = "password"

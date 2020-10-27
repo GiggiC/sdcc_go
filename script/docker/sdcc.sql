@@ -2,18 +2,18 @@
 
 CREATE SEQUENCE messages_id_seq INCREMENT 1 MINVALUE 1 MAXVALUE 2147483647 START 363 CACHE 1;
 
-CREATE TABLE "public"."topics" (
+CREATE TABLE IF NOT EXISTS "public"."topics" (
     "name" text NOT NULL,
     CONSTRAINT "topics_pk" PRIMARY KEY ("name")
 ) WITH (oids = false);
 
-CREATE TABLE "public"."users" (
+CREATE TABLE IF NOT EXISTS "public"."users" (
     "email" text NOT NULL,
     "password" text,
     CONSTRAINT "users_pk" PRIMARY KEY ("email")
 ) WITH (oids = false);
 
-CREATE TABLE "public"."messages" (
+CREATE TABLE IF NOT EXISTS "public"."messages" (
     "payload" text,
     "topic" text,
     "id" integer DEFAULT nextval('messages_id_seq') NOT NULL,
@@ -26,7 +26,7 @@ CREATE TABLE "public"."messages" (
     CONSTRAINT "messages_topics_name_fk" FOREIGN KEY (topic) REFERENCES topics(name) ON UPDATE CASCADE ON DELETE CASCADE NOT DEFERRABLE
 ) WITH (oids = false);
 
-CREATE TABLE "public"."subscriptions" (
+CREATE TABLE IF NOT EXISTS "public"."subscriptions" (
     "subscriber" text NOT NULL,
     "topic" text NOT NULL,
     CONSTRAINT "subscriptions_pk" PRIMARY KEY ("subscriber", "topic"),
@@ -51,4 +51,5 @@ INSERT INTO "topics" ("name") VALUES
 ('Auto'),
 ('Moto'),
 ('Casa'),
-('Videogames');
+('Videogames')
+ON CONFLICT DO NOTHING;

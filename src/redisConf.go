@@ -2,7 +2,7 @@ package main
 
 import (
 	"context"
-	"github.com/go-redis/redis"
+	"github.com/go-redis/redis/v8"
 	"os"
 )
 

@@ -1,4 +1,3 @@
-// main.go
 package main
 
 import (
@@ -10,7 +9,7 @@ import (
 )
 
 const (
-	host     = "172.21.0.2"
+	host     = "172.28.1.3"
 	port     = 5432
 	user     = "postgres"
 	password = "password"
@@ -35,7 +34,7 @@ func main() {
 
 	db := initDB()
 
-	file, err := ioutil.ReadFile("/home/luigi/go/sdcc_go/script/docker/sdcc.sql")
+	file, err := ioutil.ReadFile("/home/luigi/go/src/sdcc_go/script/docker/sdcc.sql")
 
 	if err != nil {
 		fmt.Println(err)
