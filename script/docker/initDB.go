@@ -34,7 +34,7 @@ func main() {
 
 	db := initDB()
 
-	file, err := ioutil.ReadFile("/home/luigi/go/src/sdcc_go/script/docker/sdcc.sql")
+	file, err := ioutil.ReadFile("/home/luigi/go/sdcc_go/script/docker/sdcc.sql")
 
 	if err != nil {
 		fmt.Println(err)
