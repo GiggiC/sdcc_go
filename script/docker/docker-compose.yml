@@ -19,7 +19,7 @@ services:
       node_net:
         ipv4_address: 172.28.1.4
 
-# networking for the Redis container
+# networking for containers
 networks:
   node_net:
     ipam:

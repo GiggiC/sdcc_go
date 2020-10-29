@@ -17,11 +17,14 @@ type TokenDetails struct {
 	AtExpires   int64
 }
 
+var tokenExpirationTime = p.GetInt("token-expiration-time", 15)
+
+//Creating token for user session
 func CreateToken(email string) (*TokenDetails, error) {
 
 	td := &TokenDetails{}
-	td.AtExpires = time.Now().Local().Add(time.Minute * 15).Unix()
-	td.AccessUuid = uuid.NewV4().String()
+	td.AtExpires = time.Now().Local().Add(time.Minute * time.Duration(tokenExpirationTime)).Unix() //setting token expiration time
+	td.AccessUuid = uuid.NewV4().String()                                                          //setting token unique universal ID
 
 	err := os.Setenv("ACCESS_SECRET", "jdnfksdmfksd")
 
@@ -45,6 +48,7 @@ func CreateToken(email string) (*TokenDetails, error) {
 	return td, nil
 }
 
+//Inserting token into Redis db
 func CreateAuth(email string, td *TokenDetails) error {
 
 	at := time.Unix(td.AtExpires, 0) //converting Unix to UTC(to Time object)
@@ -60,6 +64,7 @@ func CreateAuth(email string, td *TokenDetails) error {
 	return nil
 }
 
+//Verifying token signature
 func VerifyToken(c *gin.Context) (*jwt.Token, error) {
 
 	tokenString := ExtractToken(c)
@@ -83,6 +88,7 @@ func VerifyToken(c *gin.Context) (*jwt.Token, error) {
 	return token, nil
 }
 
+//Checking token permission and validity
 func TokenValid(c *gin.Context) error {
 
 	token, err := VerifyToken(c)
@@ -100,6 +106,7 @@ func TokenValid(c *gin.Context) error {
 	return nil
 }
 
+//Extracting token from browser local storage
 func ExtractToken(c *gin.Context) string {
 
 	accessToken, err := c.Request.Cookie("access_token")
@@ -112,6 +119,7 @@ func ExtractToken(c *gin.Context) string {
 	return accessToken.Value
 }
 
+//Extracting token information
 func ExtractTokenMetadata(c *gin.Context) (*AccessDetails, error) {
 
 	token, err := VerifyToken(c)
@@ -143,6 +151,7 @@ func ExtractTokenMetadata(c *gin.Context) (*AccessDetails, error) {
 	return nil, err
 }
 
+//Getting token from Redis db
 func FetchAuth(authD *AccessDetails) error {
 
 	_, err := client.Get(ctx, authD.AccessUuid).Result()
@@ -154,6 +163,7 @@ func FetchAuth(authD *AccessDetails) error {
 	return nil
 }
 
+//Deleting token from Redis db
 func DeleteAuth(givenUuid string) (int64, error) {
 
 	deleted, err := client.Del(ctx, givenUuid).Result()
@@ -165,6 +175,7 @@ func DeleteAuth(givenUuid string) (int64, error) {
 	return deleted, nil
 }
 
+//Checking user authorization for handler function
 func TokenAuthMiddleware() gin.HandlerFunc {
 
 	return func(c *gin.Context) {
@@ -176,7 +187,7 @@ func TokenAuthMiddleware() gin.HandlerFunc {
 
 			if strings.Contains(userAgent, "curl") {
 
-				c.JSON(http.StatusUnauthorized, "Status Unauthorized")
+				c.Writer.WriteHeader(http.StatusUnauthorized)
 
 			} else {
 

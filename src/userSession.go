@@ -6,6 +6,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"golang.org/x/crypto/bcrypt"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -44,14 +45,14 @@ func (s *server) registration(c *gin.Context) {
 
 	err = s.db.QueryRow("SELECT email FROM users WHERE email=$1", user.Email).Scan(&user)
 
-	variable := "success"
+	httpCode := http.StatusOK
 
 	if err == sql.ErrNoRows {
 
 		hashedPassword, errPass := bcrypt.GenerateFromPassword([]byte(user.Password), bcrypt.DefaultCost)
 
 		if errPass != nil {
-			variable = "Password Generation Error!"
+			httpCode = http.StatusInternalServerError
 			panic(errPass)
 		}
 
@@ -60,18 +61,29 @@ func (s *server) registration(c *gin.Context) {
 		_, errDB := s.db.Exec(sqlStatement, user.Email, hashedPassword)
 
 		if errDB != nil {
-			variable = "Internal Server Error!"
+			httpCode = http.StatusInternalServerError
 			panic(errDB)
 		}
 
 	} else {
 
-		variable = "User Already Exists!"
+		httpCode = http.StatusConflict
 	}
 
-	result, _ := json.Marshal(variable)
-	c.Writer.Header().Set("Content-Type", "application/json")
-	_, err = c.Writer.Write(result)
+	userAgent := c.Request.Header.Get("User-Agent")
+
+	if strings.Contains(userAgent, "curl") {
+
+		c.Writer.WriteHeader(httpCode)
+
+	} else {
+
+		result, _ := json.Marshal(httpCode)
+		c.Writer.Header().Set("Content-Type", "application/json")
+		_, err = c.Writer.Write(result)
+
+	}
+
 }
 
 func loginPage(c *gin.Context) {
@@ -99,45 +111,66 @@ func (s *server) login(c *gin.Context) {
 
 	var databaseEmail string
 	var databasePassword string
+	httpCode := http.StatusOK
 
 	err = s.db.QueryRow("SELECT email, password FROM users WHERE email=$1", user.Email).Scan(&databaseEmail, &databasePassword)
 
+	userAgent := c.Request.Header.Get("User-Agent")
+
 	if err != nil {
 
-		redirect(c, "login.html", "not-logged", nil, false, http.StatusUnauthorized, "Login Page")
-		return
+		httpCode = http.StatusUnauthorized
 	}
 
 	err = bcrypt.CompareHashAndPassword([]byte(databasePassword), []byte(user.Password))
 
 	if err != nil {
 
-		redirect(c, "login.html", "not-logged", nil, false, http.StatusUnauthorized, "Login Page")
-		return
+		httpCode = http.StatusUnauthorized
 	}
 
 	ts, err := CreateToken(user.Email)
 
 	if err != nil {
 
-		redirect(c, "login.html", "not-logged", nil, false, http.StatusUnprocessableEntity, "Login Page")
-		return
+		httpCode = http.StatusUnprocessableEntity
 	}
 
 	saveErr := CreateAuth(user.Email, ts)
 
 	if saveErr != nil {
-		redirect(c, "login.html", "not-logged", nil, false, http.StatusUnprocessableEntity, "Login Page")
-		return
+
+		httpCode = http.StatusUnprocessableEntity
 	}
 
-	http.SetCookie(c.Writer, &http.Cookie{
-		Name:    "access_token",
-		Value:   ts.AccessToken,
-		Expires: time.Now().Local().Add(time.Minute * 15),
-	})
+	if httpCode != http.StatusOK {
 
-	c.JSON(http.StatusOK, ts.AccessToken)
+		if strings.Contains(userAgent, "curl") {
+
+			c.Writer.WriteHeader(httpCode)
+
+		} else {
+
+			redirect(c, "login.html", "not-logged", nil, false, httpCode, "Login Page")
+
+		}
+
+	} else {
+
+		http.SetCookie(c.Writer, &http.Cookie{
+			Name:    "access_token",
+			Value:   ts.AccessToken,
+			Expires: time.Now().Local().Add(time.Minute * 15),
+		})
+
+		if strings.Contains(userAgent, "curl") {
+
+			c.Writer.WriteHeader(http.StatusOK)
+
+		}
+
+	}
+
 }
 
 func logout(c *gin.Context) {
@@ -147,18 +180,48 @@ func logout(c *gin.Context) {
 	au, _ := ExtractTokenMetadata(c)
 	deleted, delErr := DeleteAuth(au.AccessUuid)
 
+	userAgent := c.Request.Header.Get("User-Agent")
+
+	httpCode := http.StatusOK
+
 	if delErr != nil || deleted == 0 { //if any goes wrong
 
-		redirect(c, "login.html", "not-logged", nil, false, http.StatusUnauthorized, "Login Page")
+		httpCode = http.StatusUnauthorized
+		//redirect(c, "login.html", "not-logged", nil, false, http.StatusUnauthorized, "Login Page")
 	}
 
-	http.SetCookie(c.Writer, &http.Cookie{
-		Name:    "access_token",
-		Value:   "",
-		Expires: time.Now().Local(),
-	})
+	if httpCode != http.StatusOK {
 
-	redirect(c, "login.html", "not-logged", nil, false, http.StatusOK, "Login Page")
+		if strings.Contains(userAgent, "curl") {
+
+			c.Writer.WriteHeader(httpCode)
+
+		} else {
+
+			redirect(c, "login.html", "not-logged", nil, false, httpCode, "Login Page")
+
+		}
+
+	} else {
+
+		http.SetCookie(c.Writer, &http.Cookie{
+			Name:    "access_token",
+			Value:   "",
+			Expires: time.Now().Local(),
+		})
+
+		if strings.Contains(userAgent, "curl") {
+
+			c.Writer.WriteHeader(httpCode)
+
+		} else {
+
+			redirect(c, "login.html", "not-logged", nil, false, http.StatusOK, "Login Page")
+
+		}
+
+	}
+
 }
 
 func checkSession(c *gin.Context) {

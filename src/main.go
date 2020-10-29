@@ -3,7 +3,6 @@ package main
 
 import (
 	"encoding/json"
-	"fmt"
 	"github.com/gin-gonic/gin"
 	_ "github.com/lib/pq"
 	"github.com/magiconair/properties"
@@ -22,7 +21,7 @@ type Topic struct {
 	Flag bool
 }
 
-type DataEvent struct {
+type MessageData struct {
 	Message        string    `json:"Message"`
 	Title          string    `json:"Title"`
 	Topic          string    `json:"Topic"`
@@ -35,24 +34,28 @@ type DataEvent struct {
 	Longitude      float64   `json:"Longitude"`
 }
 
-type DataEventSlice []DataEvent
+type MessageDataSlice []MessageData
 
 type Topics []string
 
 var GlobalTopics Topics
 
-type EventBus struct {
-	topicMessages map[string]DataEventSlice //key: topic - value: messages
-	userTopics    map[string]Topics         //key: user  - value: topics
+//Struct for queue implementation
+type EventBroker struct {
+	topicMessages map[string]MessageDataSlice //key: topic - value: messages
+	userTopics    map[string]Topics           //key: user  - value: topics
 	rm            sync.RWMutex
 }
 
 type Receivers struct {
 	dbServer server
-	eb       EventBus
+	eb       EventBroker
 }
 
-var requests = make(map[string]DataEvent)
+//Map for requests filtering mechanism
+var requests = make(map[string]MessageData)
+
+//Loading from properties file
 var p = properties.MustLoadFile("../conf.properties", properties.UTF8)
 var dbPersistence = p.GetBool("db-persistence", true)
 var deliverySemantic = p.GetString("delivery-semantic", "at-least-once")
@@ -61,8 +64,12 @@ var deliveryTimeout = p.GetInt("delivery-timeout", 100)
 var eliminationPeriod = p.GetInt("elimination-period", 1)
 var requestLifetime = p.GetInt("request-lifetime", 2)
 var garbageCollectorPeriod = p.GetInt("garbage-collector-period", 1)
+
 var router = gin.Default()
 
+var logFile os.File
+
+//Adding user subscription into EventBroker
 func (r *Receivers) topicSubscription(topic string, email string) {
 
 	r.eb.rm.Lock()
@@ -81,51 +88,42 @@ func (r *Receivers) topicSubscription(topic string, email string) {
 	r.eb.rm.Unlock()
 }
 
-func remove(s []string, i int) []string {
-
-	s[i] = s[len(s)-1]
-	return s[:len(s)-1]
-}
-
+//Removing user subscription from EventBroker
 func (r *Receivers) topicUnsubscription(email string, topic string) {
 
 	r.eb.rm.Lock()
 
 	topicList := r.eb.userTopics[email]
-	var newList []string
+	var newTopicList []string
 
 	for i := 0; i < len(topicList); i++ {
 
 		if topicList[i] == topic {
 
-			newList = remove(topicList, i)
+			newTopicList = remove(topicList, i)
 		}
 	}
 
 	delete(r.eb.userTopics, email)
 
-	r.eb.userTopics[email] = newList
+	r.eb.userTopics[email] = newTopicList
 
 	r.eb.rm.Unlock()
 }
 
-func (r *Receivers) publishTo(topic string, title string, message string, radius int, lifeTime time.Time, latitude string, longitude string) bool {
+//Inserting message into EventBroker
+func (r *Receivers) publishTo(messageData MessageData) bool {
 
 	r.eb.rm.RLock()
 
 	checked := false
 
-	latitudeFloat, _ := strconv.ParseFloat(latitude, 64)
-	longitudeFloat, _ := strconv.ParseFloat(longitude, 64)
-	dataEvent := DataEvent{Message: message, Topic: topic, Title: title, Radius: radius, ExpirationTime: lifeTime,
-		Latitude: latitudeFloat, Longitude: longitudeFloat}
-
-	size := len(r.eb.topicMessages[topic])
-	r.eb.topicMessages[topic] = append(r.eb.topicMessages[topic], dataEvent)
-	size1 := len(r.eb.topicMessages[topic])
+	size := len(r.eb.topicMessages[messageData.Topic])
+	r.eb.topicMessages[messageData.Topic] = append(r.eb.topicMessages[messageData.Topic], messageData)
+	sizeAfter := len(r.eb.topicMessages[messageData.Topic])
 
 	//size is bigger if insertion is completed
-	if size1 > size {
+	if sizeAfter > size {
 		checked = true
 	}
 
@@ -134,12 +132,14 @@ func (r *Receivers) publishTo(topic string, title string, message string, radius
 	return checked
 }
 
+//Deleting message from db
 func (r *Receivers) deleteMessageFromDB(topic string) {
 
 	sqlStatement := `DELETE FROM messages WHERE topic = $1 AND lifetime <= $2`
 	_, err := r.dbServer.db.Exec(sqlStatement, topic, time.Now().Local())
 
 	if err != nil {
+
 		panic(err)
 	}
 }
@@ -179,7 +179,7 @@ func removeRequest(c *gin.Context) {
 
 	checkSession(c)
 
-	var message DataEvent
+	var message MessageData
 	err := json.NewDecoder(c.Request.Body).Decode(&message)
 
 	if err != nil {
@@ -241,19 +241,21 @@ func notificationsPage(c *gin.Context) {
 
 func (r *Receivers) notifications(c *gin.Context) {
 
+	log.Print("Parola che risconosciamo")
+
 	checkSession(c)
 
 	ad, _ := ExtractTokenMetadata(c)
 	email := ad.Email
 
-	var d DataEvent
+	var d MessageData
 	err := json.NewDecoder(c.Request.Body).Decode(&d)
 
 	if err != nil {
 		panic(err)
 	}
 
-	var notifications []DataEvent
+	var notifications []MessageData
 
 	for _, topic := range r.eb.userTopics[email] {
 
@@ -326,7 +328,7 @@ func (r *Receivers) editSubscription(c *gin.Context) {
 	ad, _ := ExtractTokenMetadata(c)
 	email := ad.Email
 
-	var dataEvent DataEvent
+	var dataEvent MessageData
 	err := json.NewDecoder(c.Request.Body).Decode(&dataEvent)
 
 	if err != nil {
@@ -408,7 +410,7 @@ func (r *Receivers) publish(c *gin.Context) {
 
 	checkSession(c)
 
-	var message DataEvent
+	var message MessageData
 	err := json.NewDecoder(c.Request.Body).Decode(&message)
 
 	if err != nil {
@@ -432,8 +434,7 @@ func (r *Receivers) publish(c *gin.Context) {
 		ch := make(chan bool)
 
 		go func() {
-			ch <- r.publishTo(message.Topic, message.Title, message.Message, message.Radius, expirationTime, fmt.Sprintf("%f", message.Latitude),
-				fmt.Sprintf("%f", message.Longitude))
+			ch <- r.publishTo(message)
 		}()
 
 		checked := <-ch
@@ -507,11 +508,25 @@ func (r *Receivers) initEB() {
 	}
 
 	for messages.Next() {
-		var payload, topic, title, latitude, longitude string
-		var radius, id int
+		var payload, topic, title, id, latitude, longitude string
+		var radius int
 		var lifetime time.Time
 		_ = messages.Scan(&payload, &topic, &id, &radius, &latitude, &longitude, &lifetime, &title)
-		r.publishTo(topic, title, payload, radius, lifetime, latitude, longitude)
+
+		latitudeFloat, _ := strconv.ParseFloat(latitude, 64)
+		longitudeFloat, _ := strconv.ParseFloat(longitude, 64)
+
+		messageData := MessageData{
+			Message:        payload,
+			Title:          title,
+			Topic:          topic,
+			Radius:         radius,
+			ExpirationTime: lifetime,
+			Latitude:       latitudeFloat,
+			Longitude:      longitudeFloat,
+		}
+
+		r.publishTo(messageData)
 
 	}
 
@@ -547,8 +562,8 @@ func main() {
 	s, db := initDB()
 	defer db.Close()
 
-	var eb = &EventBus{
-		topicMessages: map[string]DataEventSlice{},
+	var eb = &EventBroker{
+		topicMessages: map[string]MessageDataSlice{},
 		userTopics:    map[string]Topics{},
 	}
 
@@ -567,6 +582,8 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	log.SetOutput(logFile)
 
 	router.Use(gin.LoggerWithWriter(logFile))
 

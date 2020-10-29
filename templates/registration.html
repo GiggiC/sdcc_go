@@ -54,7 +54,7 @@
 <script>
     function check() {
         if ($('#confirmed-password').val() !== $('#password').val()) {
-            alert("Password Must Be Matching!")
+            alert("Passwords Must Match!")
             return false
         }
         return true
@@ -62,7 +62,6 @@
 
     $(document).keydown(function (e) {
         if (e.keyCode === 13) {
-            check()
             registration();
         }
     });
@@ -79,13 +78,19 @@
                 url: "/registration",
                 data: JSON.stringify({Email: email, Password: password}),
                 success: function (variable) {
-                    if (variable === "success") {
+                    if (variable === 200) {
                         alert("Registration Successful!")
                         window.location.href = '/'
-                    } else {
-                        alert(variable)
+                    } else if (variable === 409) {
+                        alert("User Already Exists")
                         window.location.href = '/registrationPage'
+                    }else {
+
+                        alert("Internal Server Error")
+                        window.location.href = '/registrationPage'
+
                     }
+
                 }
             })
         }
