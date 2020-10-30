@@ -552,8 +552,8 @@ func main() {
 
 	r.initEB()
 
-	//go r.messageGarbageCollector() //go routine for message garbage collector
-	//go requestGarbageCollector()   //go routine for requests garbage collector
+	go r.messageGarbageCollector() //go routine for message garbage collector
+	go requestGarbageCollector()   //go routine for requests garbage collector
 
 	logFile, err := os.OpenFile("../log/server.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 
