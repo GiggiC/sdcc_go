@@ -114,7 +114,7 @@ func (r *Receivers) topicUnsubscription(email string, topic string) {
 //Inserting message into EventBroker
 func (r *Receivers) publishTo(messageData MessageData) bool {
 
-	r.eb.rm.RLock()
+	r.eb.rm.Lock()
 
 	checked := false
 
@@ -127,7 +127,7 @@ func (r *Receivers) publishTo(messageData MessageData) bool {
 		checked = true
 	}
 
-	r.eb.rm.RUnlock()
+	r.eb.rm.Unlock()
 
 	return checked
 }
@@ -552,8 +552,8 @@ func main() {
 
 	r.initEB()
 
-	go r.messageGarbageCollector() //go routine for message garbage collector
-	go requestGarbageCollector()   //go routine for requests garbage collector
+	//go r.messageGarbageCollector() //go routine for message garbage collector
+	//go requestGarbageCollector()   //go routine for requests garbage collector
 
 	logFile, err := os.OpenFile("../log/server.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 

@@ -11,22 +11,22 @@ type server struct {
 }
 
 //localhost configuration
-const (
+/*const (
 	host     = "172.28.1.3"
 	port     = 5432
 	user     = "postgres"
 	password = "password"
 	dbname   = "sdcc"
-)
+)*/
 
 //RDS deployment configuration
-/*const (
+const (
 	host     = "sdcc-db.c6fwapw2bm2k.us-east-1.rds.amazonaws.com"
 	port     = 5432
 	user     = "postgres"
 	password = "ElAmqMhwe82DonytfC1a"
 	dbname   = "postgres"
-)*/
+)
 
 func initDB() (s *server, database *sql.DB) {
 
