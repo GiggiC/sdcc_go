@@ -5,6 +5,7 @@ import (
 	"github.com/dgrijalva/jwt-go"
 	"github.com/gin-gonic/gin"
 	"github.com/twinj/uuid"
+	"log"
 	"net/http"
 	"os"
 	"strings"
@@ -29,7 +30,7 @@ func CreateToken(email string) (*TokenDetails, error) {
 	err := os.Setenv("ACCESS_SECRET", "jdnfksdmfksd")
 
 	if err != nil {
-		panic(err)
+		log.Panic(err)
 	}
 
 	atClaims := jwt.MapClaims{}

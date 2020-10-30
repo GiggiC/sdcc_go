@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"github.com/gin-gonic/gin"
 	"golang.org/x/crypto/bcrypt"
+	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -20,27 +21,29 @@ type LoginDetails struct {
 	Password string `json:"Password"`
 }
 
+//Redirecting to registration page
 func registrationPage(c *gin.Context) {
 
 	err := TokenValid(c)
 
 	if err != nil {
 
-		redirect(c, "registration.html", "not-logged", nil, false, http.StatusOK, "Registration Page")
+		redirect(c, "registration.html", "not-logged", nil, false, http.StatusUnauthorized, "Registration Page")
 
 	} else {
 
-		redirect(c, "notifications.html", "logged", nil, true, http.StatusOK, "Notifications")
+		redirect(c, "notifications.html", "logged", nil, true, http.StatusOK, "Notifications Page")
 	}
 }
 
+//Registering user into db
 func (s *server) registration(c *gin.Context) {
 
 	var user LoginDetails
 	err := json.NewDecoder(c.Request.Body).Decode(&user)
 
 	if err != nil {
-		panic(err)
+		log.Panic(err)
 	}
 
 	err = s.db.QueryRow("SELECT email FROM users WHERE email=$1", user.Email).Scan(&user)
@@ -53,7 +56,7 @@ func (s *server) registration(c *gin.Context) {
 
 		if errPass != nil {
 			httpCode = http.StatusInternalServerError
-			panic(errPass)
+			log.Panic(errPass)
 		}
 
 		sqlStatement := `INSERT INTO users (email, password) VALUES ($1, $2)`
@@ -62,7 +65,7 @@ func (s *server) registration(c *gin.Context) {
 
 		if errDB != nil {
 			httpCode = http.StatusInternalServerError
-			panic(errDB)
+			log.Panic(errDB)
 		}
 
 	} else {
@@ -86,27 +89,29 @@ func (s *server) registration(c *gin.Context) {
 
 }
 
+//Redirecting to login page
 func loginPage(c *gin.Context) {
 
 	err := TokenValid(c)
 
 	if err != nil {
 
-		redirect(c, "login.html", "not-logged", nil, false, http.StatusOK, "Login Page")
+		redirect(c, "login.html", "not-logged", nil, false, http.StatusUnauthorized, "Login Page")
 
 	} else {
 
-		redirect(c, "notifications.html", "logged", nil, true, http.StatusOK, "Notifications")
+		redirect(c, "notifications.html", "logged", nil, true, http.StatusOK, "Notifications Page")
 	}
 }
 
+//Logging in authorized user
 func (s *server) login(c *gin.Context) {
 
 	var user LoginDetails
 	err := json.NewDecoder(c.Request.Body).Decode(&user)
 
 	if err != nil {
-		panic(err)
+		log.Panic(err)
 	}
 
 	var databaseEmail string
@@ -114,8 +119,6 @@ func (s *server) login(c *gin.Context) {
 	httpCode := http.StatusOK
 
 	err = s.db.QueryRow("SELECT email, password FROM users WHERE email=$1", user.Email).Scan(&databaseEmail, &databasePassword)
-
-	userAgent := c.Request.Header.Get("User-Agent")
 
 	if err != nil {
 
@@ -142,6 +145,8 @@ func (s *server) login(c *gin.Context) {
 
 		httpCode = http.StatusUnprocessableEntity
 	}
+
+	userAgent := c.Request.Header.Get("User-Agent")
 
 	if httpCode != http.StatusOK {
 
@@ -173,22 +178,23 @@ func (s *server) login(c *gin.Context) {
 
 }
 
+//Logging out user
 func logout(c *gin.Context) {
 
 	checkSession(c)
 
 	au, _ := ExtractTokenMetadata(c)
-	deleted, delErr := DeleteAuth(au.AccessUuid)
-
-	userAgent := c.Request.Header.Get("User-Agent")
-
 	httpCode := http.StatusOK
 
-	if delErr != nil || deleted == 0 { //if any goes wrong
+	//Deleting token from Redis db
+	deleted, delErr := DeleteAuth(au.AccessUuid)
+
+	if delErr != nil || deleted == 0 {
 
 		httpCode = http.StatusUnauthorized
-		//redirect(c, "login.html", "not-logged", nil, false, http.StatusUnauthorized, "Login Page")
 	}
+
+	userAgent := c.Request.Header.Get("User-Agent")
 
 	if httpCode != http.StatusOK {
 
@@ -204,6 +210,7 @@ func logout(c *gin.Context) {
 
 	} else {
 
+		//Removing user permission from browser side
 		http.SetCookie(c.Writer, &http.Cookie{
 			Name:    "access_token",
 			Value:   "",
@@ -224,7 +231,8 @@ func logout(c *gin.Context) {
 
 }
 
-func checkSession(c *gin.Context) {
+//Checking user session and permission
+func checkSession(c *gin.Context) string {
 
 	tokenAuth, exErr := ExtractTokenMetadata(c)
 	fErr := FetchAuth(tokenAuth)
@@ -234,16 +242,18 @@ func checkSession(c *gin.Context) {
 		redirect(c, "login.html", "not-logged", nil, false, http.StatusUnauthorized, "Login Page")
 		c.Abort()
 	}
+
+	return tokenAuth.Email
 }
 
+//Redirecting function
 func redirect(c *gin.Context, url string, status string, results interface{}, check bool, code int, title string) {
 
 	var email string
 
 	if check {
-		checkSession(c)
-		ad, _ := ExtractTokenMetadata(c)
-		email = ad.Email
+
+		email = checkSession(c)
 	}
 
 	c.HTML(

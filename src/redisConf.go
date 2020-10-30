@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"github.com/go-redis/redis/v8"
+	"log"
 	"os"
 )
 
@@ -14,8 +15,8 @@ func initRedis() {
 	dsn := os.Getenv("REDIS_DSN")
 
 	if len(dsn) == 0 {
-		dsn = "localhost:6379"
-		//dsn = "18.211.56.181:6379"
+		dsn = "localhost:6379" //localhost configuration
+		//dsn = "18.211.56.181:6379"	//EC2 configuration
 	}
 
 	client = redis.NewClient(&redis.Options{
@@ -26,6 +27,6 @@ func initRedis() {
 	_, err := client.Ping(ctx).Result()
 
 	if err != nil {
-		panic(err)
+		log.Panic(err)
 	}
 }

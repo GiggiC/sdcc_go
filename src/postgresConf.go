@@ -3,12 +3,14 @@ package main
 import (
 	"database/sql"
 	"fmt"
+	"log"
 )
 
 type server struct {
 	db *sql.DB
 }
 
+//localhost configuration
 const (
 	host     = "172.28.1.3"
 	port     = 5432
@@ -17,6 +19,7 @@ const (
 	dbname   = "sdcc"
 )
 
+//RDS deployment configuration
 /*const (
 	host     = "sdcc-db.c6fwapw2bm2k.us-east-1.rds.amazonaws.com"
 	port     = 5432
@@ -33,16 +36,16 @@ func initDB() (s *server, database *sql.DB) {
 	db, err := sql.Open("postgres", psqlInfo)
 
 	if err != nil {
-		panic(err)
+		log.Panic(err)
 	}
 
 	err = db.Ping()
 
 	if err != nil {
-		panic(err)
+		log.Panic(err)
 	}
 
-	fmt.Println("Successfully connected!")
+	log.Println("Successfully connected!")
 
 	return &server{db: db}, db
 }

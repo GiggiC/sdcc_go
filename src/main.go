@@ -6,7 +6,6 @@ import (
 	"github.com/gin-gonic/gin"
 	_ "github.com/lib/pq"
 	"github.com/magiconair/properties"
-	"github.com/umahmood/haversine"
 	"log"
 	"net/http"
 	"os"
@@ -64,6 +63,7 @@ var deliveryTimeout = p.GetInt("delivery-timeout", 100)
 var eliminationPeriod = p.GetInt("elimination-period", 1)
 var requestLifetime = p.GetInt("request-lifetime", 2)
 var garbageCollectorPeriod = p.GetInt("garbage-collector-period", 1)
+var listeningPort = p.GetString("app-listening-port", "8080")
 
 var router = gin.Default()
 
@@ -140,10 +140,11 @@ func (r *Receivers) deleteMessageFromDB(topic string) {
 
 	if err != nil {
 
-		panic(err)
+		log.Panic(err)
 	}
 }
 
+//Deleting message from queue
 func (r *Receivers) deleteMessageFromQueue(topic string) {
 
 	for i := 0; i < len(r.eb.topicMessages[topic]); {
@@ -160,7 +161,8 @@ func (r *Receivers) deleteMessageFromQueue(topic string) {
 	}
 }
 
-func requestsRemoval() {
+//Removing requests periodically for at-most-once and exactly-once semantics
+func requestGarbageCollector() {
 
 	for {
 
@@ -175,6 +177,7 @@ func requestsRemoval() {
 	}
 }
 
+//Removing request in exactly-once semantic
 func removeRequest(c *gin.Context) {
 
 	checkSession(c)
@@ -183,13 +186,14 @@ func removeRequest(c *gin.Context) {
 	err := json.NewDecoder(c.Request.Body).Decode(&message)
 
 	if err != nil {
-		panic(err)
+		log.Panic(err)
 	}
 
 	delete(requests, message.RequestID)
 }
 
-func (r *Receivers) garbageCollection() {
+//Deleting expired messages from queue and db periodically
+func (r *Receivers) messageGarbageCollector() {
 
 	for {
 
@@ -209,50 +213,22 @@ func (r *Receivers) garbageCollection() {
 	}
 }
 
-func checkDistance(x1 float64, x2 float64, y1 float64, y2 float64, r1 int, r2 int) bool {
-
-	sessionLocation := haversine.Coord{Lat: x1, Lon: y1}
-	publisherLocation := haversine.Coord{Lat: x2, Lon: y2}
-	_, km := haversine.Distance(sessionLocation, publisherLocation)
-
-	if km > float64(r1+r2) {
-		return false
-	}
-
-	return true
-}
-
-func stringInSlice(a string, list []string) bool {
-
-	for _, b := range list {
-
-		if b == a {
-			return true
-		}
-	}
-
-	return false
-}
-
+//Redirecting to notifications page
 func notificationsPage(c *gin.Context) {
 
-	redirect(c, "notifications.html", "logged", nil, true, http.StatusOK, "Notifications")
+	redirect(c, "notifications.html", "logged", nil, true, http.StatusOK, "Notifications Page")
 }
 
+//Getting all user messages based on radius and subscriptions
 func (r *Receivers) notifications(c *gin.Context) {
 
-	log.Print("Parola che risconosciamo")
-
-	checkSession(c)
-
-	ad, _ := ExtractTokenMetadata(c)
-	email := ad.Email
+	email := checkSession(c)
 
 	var d MessageData
 	err := json.NewDecoder(c.Request.Body).Decode(&d)
 
 	if err != nil {
-		panic(err)
+		log.Panic(err)
 	}
 
 	var notifications []MessageData
@@ -273,16 +249,15 @@ func (r *Receivers) notifications(c *gin.Context) {
 	_, err = c.Writer.Write(result)
 
 	if err != nil {
-		panic(err)
+		log.Panic(err)
 	}
 }
 
+//Redirecting to subscription page with subscription info
 func (r *Receivers) subscriptionPage(c *gin.Context) {
 
-	checkSession(c)
+	email := checkSession(c)
 
-	ad, _ := ExtractTokenMetadata(c)
-	email := ad.Email
 	subscribed := r.eb.userTopics[email]
 
 	tRes := Topic{}
@@ -298,7 +273,7 @@ func (r *Receivers) subscriptionPage(c *gin.Context) {
 		"not in (select s.topic from subscriptions s where s.subscriber = $1)", email)
 
 	if err != nil {
-		panic(err)
+		log.Panic(err)
 	}
 
 	for noSubscribed.Next() {
@@ -321,22 +296,21 @@ func (r *Receivers) subscriptionPage(c *gin.Context) {
 	}
 }
 
+//Editing user subscription
 func (r *Receivers) editSubscription(c *gin.Context) {
 
-	checkSession(c)
-
-	ad, _ := ExtractTokenMetadata(c)
-	email := ad.Email
+	email := checkSession(c)
 
 	var dataEvent MessageData
 	err := json.NewDecoder(c.Request.Body).Decode(&dataEvent)
 
 	if err != nil {
-		panic(err)
+		log.Panic(err)
 	}
 
 	subscriptions := r.eb.userTopics[email]
 
+	//Deleting subscription if already subscribed
 	if stringInSlice(dataEvent.Topic, subscriptions) {
 
 		if dbPersistence {
@@ -345,7 +319,7 @@ func (r *Receivers) editSubscription(c *gin.Context) {
 			_, err := r.dbServer.db.Exec(sqlStatement, email, dataEvent.Topic)
 
 			if err != nil {
-				panic(err)
+				log.Panic(err)
 			}
 		}
 
@@ -359,7 +333,7 @@ func (r *Receivers) editSubscription(c *gin.Context) {
 			c.JSON(http.StatusOK, message)
 		}
 
-	} else {
+	} else { //Adding subscription if not subscribed yet
 
 		if dbPersistence {
 
@@ -367,7 +341,7 @@ func (r *Receivers) editSubscription(c *gin.Context) {
 			_, err := r.dbServer.db.Exec(sqlStatement, email, dataEvent.Topic)
 
 			if err != nil {
-				panic(err)
+				log.Panic(err)
 			}
 		}
 
@@ -383,19 +357,18 @@ func (r *Receivers) editSubscription(c *gin.Context) {
 	}
 }
 
+//Redirecting to publish page
 func (r *Receivers) publishPage(c *gin.Context) {
 
-	checkSession(c)
+	email := checkSession(c)
 
-	ad, _ := ExtractTokenMetadata(c)
-	email := ad.Email
 	results := GlobalTopics
 
 	c.HTML(
 		http.StatusOK,
 		"publish.html",
 		gin.H{
-			"title":            "",
+			"title":            "Publish Page",
 			"status":           "logged",
 			"results":          results,
 			"email":            email,
@@ -406,6 +379,7 @@ func (r *Receivers) publishPage(c *gin.Context) {
 	)
 }
 
+//Publishing message according to semantic
 func (r *Receivers) publish(c *gin.Context) {
 
 	checkSession(c)
@@ -414,17 +388,18 @@ func (r *Receivers) publish(c *gin.Context) {
 	err := json.NewDecoder(c.Request.Body).Decode(&message)
 
 	if err != nil {
-		panic(err)
+		log.Panic(err)
 	}
 
 	found := true
 
 	if deliverySemantic != "at-least-once" {
 
+		//checking if request is duplicate
 		_, found = requests[message.RequestID]
 	}
 
-	variable := "fail"
+	returnValue := "fail"
 
 	if deliverySemantic == "at-least-once" || !found {
 
@@ -439,8 +414,10 @@ func (r *Receivers) publish(c *gin.Context) {
 
 		checked := <-ch
 
+		//checking if queue insertion is successful
 		if checked {
 
+			//inserting in requests map for at-most-once and exactly-once semantics
 			if deliverySemantic != "at-least-once" {
 				message.InsertionTime = time.Now().Local()
 				requests[message.RequestID] = message
@@ -454,13 +431,13 @@ func (r *Receivers) publish(c *gin.Context) {
 
 				if err == nil {
 
-					variable = "success"
+					returnValue = "success"
 
 				}
 
 			} else {
 
-				variable = "success"
+				returnValue = "success"
 
 			}
 
@@ -472,16 +449,16 @@ func (r *Receivers) publish(c *gin.Context) {
 				_, err := r.dbServer.db.Exec(sqlStatement, msgID)
 
 				if err != nil {
-					panic(err)
+					log.Panic(err)
 				}
 			}
 
-			variable = "fail"
+			returnValue = "fail"
 		}
 
 	} else {
 
-		variable = "success"
+		returnValue = "success"
 	}
 
 	/*rnd := rand.Intn(4)
@@ -490,21 +467,22 @@ func (r *Receivers) publish(c *gin.Context) {
 		time.Sleep(6 * time.Second)
 	}*/
 
-	result, _ := json.Marshal(variable)
+	result, _ := json.Marshal(returnValue)
 	c.Writer.Header().Set("Content-Type", "application/json")
 	_, err = c.Writer.Write(result)
 
 	if err != nil {
-		panic(err)
+		log.Panic(err)
 	}
 }
 
+//Initializing event broker on application start-up
 func (r *Receivers) initEB() {
 
 	messages, err := r.dbServer.db.Query("SELECT * FROM messages")
 
 	if err != nil {
-		panic(err)
+		log.Panic(err)
 	}
 
 	for messages.Next() {
@@ -533,7 +511,7 @@ func (r *Receivers) initEB() {
 	subscriptions, err := r.dbServer.db.Query("SELECT * FROM subscriptions ORDER BY topic")
 
 	if err != nil {
-		panic(err)
+		log.Panic(err)
 	}
 
 	for subscriptions.Next() {
@@ -546,7 +524,7 @@ func (r *Receivers) initEB() {
 	data, err := r.dbServer.db.Query("SELECT name FROM topics ")
 
 	if err != nil {
-		panic(err)
+		log.Panic(err)
 	}
 
 	for data.Next() {
@@ -574,8 +552,8 @@ func main() {
 
 	r.initEB()
 
-	go r.garbageCollection()
-	go requestsRemoval()
+	go r.messageGarbageCollector() //go routine for message garbage collector
+	go requestGarbageCollector()   //go routine for requests garbage collector
 
 	logFile, err := os.OpenFile("../log/server.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 
@@ -604,8 +582,8 @@ func main() {
 	router.POST("/notifications", TokenAuthMiddleware(), r.notifications)
 	router.POST("/removeRequest", TokenAuthMiddleware(), removeRequest)
 
-	log.Println("Listening on :8080...")
-	err = router.Run(":8080")
+	log.Println("Listening on :", listeningPort)
+	err = router.Run(":" + listeningPort)
 
 	if err != nil {
 
