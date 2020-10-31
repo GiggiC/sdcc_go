@@ -51,7 +51,7 @@ function getPositionAtMostOnce(position) {
         url: "/publish",
         timeout: $('#deliveryTimeout').val(),
         tryCount: 0,
-        retryLimit: $('#retryLimit'),
+        retryLimit: $('#retryLimit').val(),
         data: JSON.stringify({
             Message: message, Topic: topic, Title: title, Radius: radius, LifeTime: lifeTime,
             Latitude: latitude, Longitude: longitude, RequestID: id
@@ -68,6 +68,7 @@ function getPositionAtMostOnce(position) {
             if (textStatus === 'timeout') {
                 this.tryCount++;
                 if (this.tryCount < this.retryLimit) {
+                    console.log(this.tryCount)
                     $.ajax(this);
                 }
             }

@@ -67,8 +67,12 @@
             type: "POST",
             url: "/login",
             data: JSON.stringify({Email: email, Password: password}),
-            success: function () {
-                window.location.href = '/notificationsPage'
+            success: function (variable) {
+                if (variable === 200) {
+                    window.location.href = '/notificationsPage'
+                } else if (variable === 401) {
+                    alert("Wrong Password")
+                }
             }
         })
     }

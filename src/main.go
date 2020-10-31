@@ -313,14 +313,11 @@ func (r *Receivers) editSubscription(c *gin.Context) {
 	//Deleting subscription if already subscribed
 	if stringInSlice(dataEvent.Topic, subscriptions) {
 
-		if dbPersistence {
+		sqlStatement := `DELETE FROM subscriptions WHERE subscriber = $1 AND topic = $2`
+		_, err := r.dbServer.db.Exec(sqlStatement, email, dataEvent.Topic)
 
-			sqlStatement := `DELETE FROM subscriptions WHERE subscriber = $1 AND topic = $2`
-			_, err := r.dbServer.db.Exec(sqlStatement, email, dataEvent.Topic)
-
-			if err != nil {
-				log.Panic(err)
-			}
+		if err != nil {
+			log.Panic(err)
 		}
 
 		r.topicUnsubscription(email, dataEvent.Topic)
@@ -335,14 +332,11 @@ func (r *Receivers) editSubscription(c *gin.Context) {
 
 	} else { //Adding subscription if not subscribed yet
 
-		if dbPersistence {
+		sqlStatement := `INSERT INTO subscriptions (subscriber, topic) VALUES ($1, $2)`
+		_, err := r.dbServer.db.Exec(sqlStatement, email, dataEvent.Topic)
 
-			sqlStatement := `INSERT INTO subscriptions (subscriber, topic) VALUES ($1, $2)`
-			_, err := r.dbServer.db.Exec(sqlStatement, email, dataEvent.Topic)
-
-			if err != nil {
-				log.Panic(err)
-			}
+		if err != nil {
+			log.Panic(err)
 		}
 
 		r.topicSubscription(dataEvent.Topic, email)
@@ -460,12 +454,6 @@ func (r *Receivers) publish(c *gin.Context) {
 
 		returnValue = "success"
 	}
-
-	/*rnd := rand.Intn(4)
-	if rnd > 0 {
-		fmt.Println("RAND: ", rnd)
-		time.Sleep(6 * time.Second)
-	}*/
 
 	result, _ := json.Marshal(returnValue)
 	c.Writer.Header().Set("Content-Type", "application/json")

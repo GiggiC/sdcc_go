@@ -156,7 +156,9 @@ func (s *server) login(c *gin.Context) {
 
 		} else {
 
-			redirect(c, "login.html", "not-logged", nil, false, httpCode, "Login Page")
+			result, _ := json.Marshal(httpCode)
+			c.Writer.Header().Set("Content-Type", "application/json")
+			_, err = c.Writer.Write(result)
 
 		}
 
@@ -167,6 +169,10 @@ func (s *server) login(c *gin.Context) {
 			Value:   ts.AccessToken,
 			Expires: time.Now().Local().Add(time.Minute * 15),
 		})
+
+		result, _ := json.Marshal(httpCode)
+		c.Writer.Header().Set("Content-Type", "application/json")
+		_, err = c.Writer.Write(result)
 
 		if strings.Contains(userAgent, "curl") {
 
