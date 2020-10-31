@@ -1,6 +1,6 @@
 # SDCC_GO Project
 
-Implementaion of a publish-subscribe message queue in Go language.
+Implementation of a publish-subscribe message queue in Go language.
 
 ## Prerequisites
 
